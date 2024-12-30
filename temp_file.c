@@ -1,121 +1,123 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
-#include <time.h>
 
-// Define event types
-typedef enum {
-    JOIN,
-    LEAVE,
-    MESSAGE,
-    MENTION
-} EventType;
+// Structure for a data packet
+typedef struct Packet {
+    int id;
+    int arrival_time;
+    int data;
+    struct Packet* next;
+} Packet;
 
-// Structure for an event
-typedef struct {
-    time_t timestamp;
-    EventType event_type;
-    int user_id;
-    // Add more specific data if needed
-} Event;
-
-// Structure for user data
-typedef struct UserData {
-    int message_count_window;
-    int join_leave_count_window;
-    int mention_count_window;
-    // Consider using a linked list for event history if needed for more detailed analysis
-} UserData;
-
-// Simple hash table implementation (for demonstration purposes, a more robust implementation is needed for production)
-#define MAX_USERS 10000
-UserData user_data[MAX_USERS];
-int user_initialized[MAX_USERS] = {0};
-
-// Time window for anomaly detection (in seconds)
-#define TIME_WINDOW 60
-
-// Anomaly thresholds (example values, these would need tuning)
-#define MESSAGE_FREQUENCY_THRESHOLD 5
-#define JOIN_LEAVE_FREQUENCY_THRESHOLD 3
-#define MENTION_COUNT_THRESHOLD 10
-
-// Function to process an event
-void process_event(Event event) {
-    int user_id = event.user_id;
-
-    if (user_id >= 0 && user_id < MAX_USERS) {
-        if (!user_initialized[user_id]) {
-            memset(&user_data[user_id], 0, sizeof(UserData));
-            user_initialized[user_id] = 1;
-        }
-
-        switch (event.event_type) {
-            case JOIN:
-            case LEAVE:
-                user_data[user_id].join_leave_count_window++;
-                break;
-            case MESSAGE:
-                user_data[user_id].message_count_window++;
-                break;
-            case MENTION:
-                user_data[user_id].mention_count_window++;
-                break;
-        }
+// Function to create a new packet
+Packet* createPacket(int id, int arrival_time, int data) {
+    Packet* new_packet = (Packet*)malloc(sizeof(Packet));
+    if (new_packet == NULL) {
+        perror("Memory allocation failed");
+        exit(EXIT_FAILURE);
     }
+    new_packet->id = id;
+    new_packet->arrival_time = arrival_time;
+    new_packet->data = data;
+    new_packet->next = NULL;
+    return new_packet;
 }
 
-// Function to detect anomalies within the time window
-void detect_anomalies() {
-    printf("--- Anomaly Detection ---\n");
-    for (int i = 0; i < MAX_USERS; i++) {
-        if (user_initialized[i]) {
-            if (user_data[i].message_count_window > MESSAGE_FREQUENCY_THRESHOLD) {
-                printf("User %d: High message frequency (%d)\n", i, user_data[i].message_count_window);
-            }
-            if (user_data[i].join_leave_count_window > JOIN_LEAVE_FREQUENCY_THRESHOLD) {
-                printf("User %d: High join/leave frequency (%d)\n", i, user_data[i].join_leave_count_window);
-            }
-            if (user_data[i].mention_count_window > MENTION_COUNT_THRESHOLD) {
-                printf("User %d: High mention count (%d)\n", i, user_data[i].mention_count_window);
-            }
-            // Reset window counters after detection (or at intervals)
-            user_data[i].message_count_window = 0;
-            user_data[i].join_leave_count_window = 0;
-            user_data[i].mention_count_window = 0;
-        }
+// Function to insert a packet into the buffer (sorted by id)
+void insertPacket(Packet** head, Packet* new_packet) {
+    if (*head == NULL || new_packet->id < (*head)->id) {
+        new_packet->next = *head;
+        *head = new_packet;
+        return;
     }
+
+    Packet* current = *head;
+    while (current->next != NULL && current->next->id < new_packet->id) {
+        current = current->next;
+    }
+    new_packet->next = current->next;
+    current->next = new_packet;
+}
+
+// Function to print the buffer
+void printBuffer(Packet* head) {
+    printf("Buffer: ");
+    Packet* current = head;
+    while (current != NULL) {
+        printf("(ID: %d, Time: %d, Data: %d) -> ", current->id, current->arrival_time, current->data);
+        current = current->next;
+    }
+    printf("NULL\n");
 }
 
 int main() {
-    // Example event stream
-    Event events[] = {
-        {time(NULL), JOIN, 1},
-        {time(NULL) + 5, MESSAGE, 1},
-        {time(NULL) + 10, MESSAGE, 1},
-        {time(NULL) + 12, MESSAGE, 1},
-        {time(NULL) + 15, MESSAGE, 1},
-        {time(NULL) + 18, MESSAGE, 1},
-        {time(NULL) + 20, JOIN, 2},
-        {time(NULL) + 22, LEAVE, 2},
-        {time(NULL) + 25, MENTION, 3},
-        {time(NULL) + 26, MENTION, 3},
-        {time(NULL) + 27, MENTION, 3},
-        {time(NULL) + 28, MENTION, 3},
-        {time(NULL) + 29, MENTION, 3},
-        {time(NULL) + 30, MENTION, 3},
-        {time(NULL) + 31, MENTION, 3},
-        {time(NULL) + 32, MENTION, 3},
-        {time(NULL) + 33, MENTION, 3},
-        {time(NULL) + 35, MESSAGE, 4},
-    };
-    int num_events = sizeof(events) / sizeof(events[0]);
+    Packet* buffer_head = NULL;
+    int next_expected_packet_id = 0;
+    int playback_threshold = 3;
+    int current_time = 0;
 
-    for (int i = 0; i < num_events; i++) {
-        process_event(events[i]);
+    // Simulate receiving packets
+    // Example input: (id, arrival_time_offset, data)
+    int incoming_packets[][3] = {
+        {0, 0, 10},
+        {2, 1, 20},
+        {1, 2, 15},
+        {4, 3, 30},
+        {3, 4, 25},
+        {6, 6, 40},
+        {7, 7, 45},
+        {5, 8, 35}
+    };
+    int num_packets = sizeof(incoming_packets) / sizeof(incoming_packets[0]);
+
+    for (int i = 0; i < num_packets; i++) {
+        int packet_id = incoming_packets[i][0];
+        int arrival_offset = incoming_packets[i][1];
+        int packet_data = incoming_packets[i][2];
+        current_time += arrival_offset;
+
+        Packet* received_packet = createPacket(packet_id, current_time, packet_data);
+        printf("Received Packet (ID: %d, Time: %d, Data: %d)\n", received_packet->id, received_packet->arrival_time, received_packet->data);
+
+        insertPacket(&buffer_head, received_packet);
+        printBuffer(buffer_head);
+
+        // Update next_expected_packet_id
+        Packet* current = buffer_head;
+        int consecutive_count = 0;
+        while (current != NULL && current->id == next_expected_packet_id + consecutive_count) {
+            consecutive_count++;
+            current = current->next;
+        }
+        next_expected_packet_id += consecutive_count;
+
+        printf("Next Expected Packet ID: %d\n", next_expected_packet_id);
+
+        // Check playback condition
+        Packet* temp = buffer_head;
+        int buffer_front_consecutive = 0;
+        int expected_id = 0;
+        while(temp != NULL && temp->id == expected_id){
+            buffer_front_consecutive++;
+            expected_id++;
+            temp = temp->next;
+        }
+
+        if (buffer_front_consecutive >= playback_threshold) {
+            printf("Playback can start! (Buffer has %d consecutive packets)\n", buffer_front_consecutive);
+        } else {
+            printf("Buffering... (Current consecutive packets at front: %d, Threshold: %d)\n", buffer_front_consecutive, playback_threshold);
+        }
+        printf("\n");
     }
 
-    detect_anomalies();
+    // Clean up memory (important in C)
+    Packet* current = buffer_head;
+    while (current != NULL) {
+        Packet* temp = current;
+        current = current->next;
+        free(temp);
+    }
 
     return 0;
 }
