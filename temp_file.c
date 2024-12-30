@@ -1,61 +1,117 @@
 #include <stdio.h>
-#include <math.h>
+#include <stdlib.h>
+#include <string.h>
 
-// Simulate the detector function (K is assumed to be 1 for simplicity here)
-double detector(int x, int y, int bx, int by) {
-    double dx = x - bx;
-    double dy = y - by;
-    return 1.0 / (dx * dx + dy * dy);
+#define MAX_TASKS 100
+
+typedef struct Task {
+    int id;
+    int duration;
+    int num_prerequisites;
+    int prerequisites[MAX_TASKS];
+    int in_degree;
+    int finish_time;
+} Task;
+
+int solve_tasks(Task tasks[], int num_tasks) {
+    int in_degree[MAX_TASKS] = {0};
+    int adj[MAX_TASKS][MAX_TASKS] = {0}; // Adjacency list for dependencies
+    int finish_times[MAX_TASKS];
+    int queue[MAX_TASKS];
+    int front = 0, rear = -1;
+    int processed_tasks = 0;
+    int max_finish_time = 0;
+
+    // Calculate in-degrees and build adjacency list
+    for (int i = 0; i < num_tasks; i++) {
+        for (int j = 0; j < tasks[i].num_prerequisites; j++) {
+            int prereq_id = tasks[i].prerequisites[j];
+            for (int k = 0; k < num_tasks; k++) {
+                if (tasks[k].id == prereq_id) {
+                    in_degree[i]++;
+                    // Find the index of the prerequisite task
+                    for (int l = 0; l < num_tasks; l++) {
+                        if (tasks[l].id == prereq_id) {
+                            adj[l][i] = 1; // Edge from prereq to current task
+                            break;
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+        tasks[i].in_degree = in_degree[i];
+        finish_times[i] = 0;
+    }
+
+    // Initialize queue with tasks having in-degree 0
+    for (int i = 0; i < num_tasks; i++) {
+        if (tasks[i].in_degree == 0) {
+            queue[++rear] = i;
+            finish_times[i] = tasks[i].duration;
+        }
+    }
+
+    while (front <= rear) {
+        int current_task_index = queue[front++];
+        processed_tasks++;
+
+        for (int i = 0; i < num_tasks; i++) {
+            if (adj[current_task_index][i]) {
+                tasks[i].in_degree--;
+                if (tasks[i].in_degree == 0) {
+                    int max_prereq_finish_time = 0;
+                    for (int j = 0; j < tasks[i].num_prerequisites; j++) {
+                        int prereq_id = tasks[i].prerequisites[j];
+                        for (int k = 0; k < num_tasks; k++) {
+                            if (tasks[k].id == prereq_id) {
+                                if (finish_times[k] > max_prereq_finish_time) {
+                                    max_prereq_finish_time = finish_times[k];
+                                }
+                                break;
+                            }
+                        }
+                    }
+                    finish_times[i] = max_prereq_finish_time + tasks[i].duration;
+                    queue[++rear] = i;
+                }
+            }
+        }
+    }
+
+    if (processed_tasks != num_tasks) {
+        return -1; // Cycle detected
+    }
+
+    for (int i = 0; i < num_tasks; i++) {
+        if (finish_times[i] > max_finish_time) {
+            max_finish_time = finish_times[i];
+        }
+    }
+
+    return max_finish_time;
 }
 
 int main() {
-    // Assume the actual beacon location is (bx, by)
-    int bx_actual = 5;
-    int by_actual = 3;
+    Task tasks[] = {
+        {1, 3, 0, {}, 0, 0},
+        {2, 2, 1, {1}, 0, 0},
+        {3, 4, 1, {1}, 0, 0},
+        {4, 1, 2, {2, 3}, 0, 0}
+    };
+    int num_tasks = sizeof(tasks) / sizeof(tasks[0]);
 
-    // Query points
-    int q1_x = 0, q1_y = 0;
-    int q2_x = 1, q2_y = 0;
-    int q3_x = 0, q3_y = 1;
+    int result = solve_tasks(tasks, num_tasks);
+    printf("Minimum time to complete all tasks: %d\n", result); // Expected output: 10
 
-    // Get signal strengths
-    double s1 = detector(q1_x, q1_y, bx_actual, by_actual);
-    double s2 = detector(q2_x, q2_y, bx_actual, by_actual);
-    double s3 = detector(q3_x, q3_y, bx_actual, by_actual);
-
-    printf("Signal at (%d, %d): %f\n", q1_x, q1_y, s1);
-    printf("Signal at (%d, %d): %f\n", q2_x, q2_x, s2); // Corrected typo here
-    printf("Signal at (%d, %d): %f\n", q3_x, q3_y, s3);
-
-    // This part would involve solving the system of equations.
-    // For simplicity, let's demonstrate a brute-force search around the origin.
-    // In a real implementation, a numerical solver or algebraic manipulation would be needed.
-
-    int estimated_bx = -1, estimated_by = -1;
-    double tolerance = 0.001; // Tolerance for comparing signal strengths
-
-    for (int bx_guess = -10; bx_guess <= 10; bx_guess++) {
-        for (int by_guess = -10; by_guess <= 10; by_guess++) {
-            double s1_guess = detector(q1_x, q1_y, bx_guess, by_guess);
-            double s2_guess = detector(q2_x, q2_y, bx_guess, by_guess);
-            double s3_guess = detector(q3_x, q3_y, bx_guess, by_guess);
-
-            if (fabs(s1 - s1_guess) < tolerance &&
-                fabs(s2 - s2_guess) < tolerance &&
-                fabs(s3 - s3_guess) < tolerance) {
-                estimated_bx = bx_guess;
-                estimated_by = by_guess;
-                break;
-            }
-        }
-        if (estimated_bx != -1) break;
-    }
-
-    if (estimated_bx != -1) {
-        printf("Estimated beacon location: (%d, %d)\n", estimated_bx, estimated_by);
-    } else {
-        printf("Could not determine beacon location.\n");
-    }
+    // Example with a cycle
+    Task tasks_cycle[] = {
+        {1, 3, 1, {2}, 0, 0},
+        {2, 2, 1, {1}, 0, 0}
+    };
+    num_tasks = sizeof(tasks_cycle) / sizeof(tasks_cycle[0]);
+    result = solve_tasks(tasks_cycle, num_tasks);
+    printf("Minimum time to complete all tasks (cycle): %d\n", result); // Expected output: -1
 
     return 0;
 }
