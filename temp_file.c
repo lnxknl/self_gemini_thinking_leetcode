@@ -19,20 +19,51 @@ bool mightContainStar(int min_x, int max_x, int min_y, int max_y) {
     return false;
 }
 
-void findStar(int min_x, int max_x, int min_y, int max_y, int* star_x, int* star_y) {
-    // Try each point in the region
-    for (int x = min_x; x <= max_x; x++) {
-        for (int y = min_y; y <= max_y; y++) {
-            if (isStar(x, y)) {
-                *star_x = x;
-                *star_y = y;
-                return;
-            }
+bool findStarHelper(int min_x, int max_x, int min_y, int max_y, int* star_x, int* star_y) {
+    // Base case: single point to check
+    if (min_x == max_x && min_y == max_y) {
+        if (isStar(min_x, min_y)) {
+            *star_x = min_x;
+            *star_y = min_y;
+            return true;
+        }
+        return false;
+    }
+
+    int mid_x = min_x + (max_x - min_x) / 2;
+    int mid_y = min_y + (max_y - min_y) / 2;
+
+    // Check each quadrant only if it might contain a star
+    if (mightContainStar(min_x, mid_x, min_y, mid_y)) {
+        if (findStarHelper(min_x, mid_x, min_y, mid_y, star_x, star_y)) {
+            return true;
         }
     }
-    // If no star found, set coordinates to -1
+    if (mightContainStar(mid_x + 1, max_x, min_y, mid_y)) {
+        if (findStarHelper(mid_x + 1, max_x, min_y, mid_y, star_x, star_y)) {
+            return true;
+        }
+    }
+    if (mightContainStar(min_x, mid_x, mid_y + 1, max_y)) {
+        if (findStarHelper(min_x, mid_x, mid_y + 1, max_y, star_x, star_y)) {
+            return true;
+        }
+    }
+    if (mightContainStar(mid_x + 1, max_x, mid_y + 1, max_y)) {
+        if (findStarHelper(mid_x + 1, max_x, mid_y + 1, max_y, star_x, star_y)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void findStar(int min_x, int max_x, int min_y, int max_y, int* star_x, int* star_y) {
+    // Initialize coordinates to -1
     *star_x = -1;
     *star_y = -1;
+    
+    // Use helper function to find the star
+    findStarHelper(min_x, max_x, min_y, max_y, star_x, star_y);
 }
 
 int main() {
