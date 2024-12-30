@@ -37,6 +37,7 @@ void insert(TrieNode *root, const char *key) {
     curr->isEndOfWord = true;
 }
 
+
 // Searches for a string in the Trie
 bool search(TrieNode *root, const char *key) {
     TrieNode *curr = root;
