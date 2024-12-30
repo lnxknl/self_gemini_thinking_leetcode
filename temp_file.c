@@ -2,165 +2,158 @@
 #include <stdlib.h>
 #include <stdbool.h>
 
-/*
- * This program implements a First Unique Character Finder in a stream of characters.
- * Example:
- * Stream: a -> b -> a -> c -> b
- * After 'a': First unique = 'a'
- * After 'b': First unique = 'a'
- * After 'a': First unique = 'b' (because 'a' is now repeated)
- * After 'c': First unique = 'b'
- * After 'b': First unique = 'c' (because 'b' is now repeated)
- */
+// Define the dimensions of the image (or grid)
+#define ROWS 10
+#define COLS 10
 
-// Node for our linked list to maintain character order
-typedef struct CharNode {
-    char character;
-    struct CharNode* next;
-} CharNode;
+// Define the value representing the white object pixel
+#define WHITE 1
+#define BLACK 0
 
-// Main structure to track unique characters
-typedef struct UniqueCharFinder {
-    int frequency[256];         // Count how many times each character appears
-    CharNode* uniqueList;       // Linked list of characters in order of appearance
-    CharNode* lastUnique;       // Points to last node for quick append
-} UniqueCharFinder;
+// Structure to represent a point (coordinate)
+typedef struct {
+    int row;
+    int col;
+} Point;
 
-// Create a new character node
-CharNode* createNode(char c) {
-    CharNode* node = (CharNode*)malloc(sizeof(CharNode));
-    if (node == NULL) {
-        printf("Memory allocation failed!\n");
-        exit(1);
-    }
-    node->character = c;
-    node->next = NULL;
-    return node;
+// Function to check if a point is within the grid boundaries
+bool is_valid(int row, int col) {
+    return (row >= 0 && row < ROWS && col >= 0 && col < COLS);
 }
 
-// Initialize our character finder
-UniqueCharFinder* createFinder() {
-    UniqueCharFinder* finder = (UniqueCharFinder*)malloc(sizeof(UniqueCharFinder));
-    if (finder == NULL) {
-        printf("Memory allocation failed!\n");
-        exit(1);
+// Depth-First Search (DFS) to find connected components
+void dfs(int row, int col, int grid[ROWS][COLS], bool visited[ROWS][COLS], Point* component, int* component_size) {
+    if (!is_valid(row, col) || visited[row][col] || grid[row][col] == BLACK) {
+        return;
     }
-    
-    // Initialize frequency array to 0
-    for (int i = 0; i < 256; i++) {
-        finder->frequency[i] = 0;
-    }
-    
-    finder->uniqueList = NULL;
-    finder->lastUnique = NULL;
-    return finder;
+
+    visited[row][col] = true;
+    component[*component_size] = (Point){row, col};
+    (*component_size)++;
+
+    // Explore adjacent pixels
+    dfs(row + 1, col, grid, visited, component, component_size);
+    dfs(row - 1, col, grid, visited, component, component_size);
+    dfs(row, col + 1, grid, visited, component, component_size);
+    dfs(row, col - 1, grid, visited, component, component_size);
 }
 
-// Add a character to our stream
-void addCharacter(UniqueCharFinder* finder, char c) {
-    printf("\nAdding character: '%c'\n", c);
-    
-    // Increment frequency count
-    finder->frequency[c]++;
-    
-    if (finder->frequency[c] == 1) {
-        // First time seeing this character - add to list
-        CharNode* newNode = createNode(c);
-        
-        if (finder->uniqueList == NULL) {
-            finder->uniqueList = newNode;
-            finder->lastUnique = newNode;
-        } else {
-            finder->lastUnique->next = newNode;
-            finder->lastUnique = newNode;
-        }
-        
-        printf("New unique character added\n");
-    }
-    else if (finder->frequency[c] == 2) {
-        // Character is now repeated - remove from unique list
-        printf("Character '%c' is now repeated - removing from unique list\n", c);
-        
-        // Special case: if it's the first node
-        if (finder->uniqueList && finder->uniqueList->character == c) {
-            CharNode* temp = finder->uniqueList;
-            finder->uniqueList = finder->uniqueList->next;
-            free(temp);
-            
-            // Update lastUnique if list is now empty
-            if (finder->uniqueList == NULL) {
-                finder->lastUnique = NULL;
-            }
-            return;
-        }
-        
-        // Search for the character in the list
-        CharNode* current = finder->uniqueList;
-        CharNode* prev = NULL;
-        
-        while (current != NULL) {
-            if (current->character == c) {
-                prev->next = current->next;
-                if (current == finder->lastUnique) {
-                    finder->lastUnique = prev;
+// Function to find the single white object in the grid
+Point* find_white_object(int grid[ROWS][COLS], int* object_size) {
+    bool visited[ROWS][COLS] = {false};
+    Point* object_pixels = NULL;
+    int max_component_size = 0;
+
+    for (int i = 0; i < ROWS; i++) {
+        for (int j = 0; j < COLS; j++) {
+            if (grid[i][j] == WHITE && !visited[i][j]) {
+                Point* current_component = (Point*)malloc(ROWS * COLS * sizeof(Point));
+                int current_component_size = 0;
+                dfs(i, j, grid, visited, current_component, &current_component_size);
+
+                if (current_component_size > max_component_size) {
+                    if (object_pixels != NULL) {
+                        free(object_pixels);
+                    }
+                    object_pixels = current_component;
+                    max_component_size = current_component_size;
+                    *object_size = current_component_size;
+                } else {
+                    free(current_component);
                 }
-                free(current);
-                break;
             }
-            prev = current;
-            current = current->next;
         }
     }
-}
 
-// Get the first unique character in our stream
-char getFirstUnique(UniqueCharFinder* finder) {
-    if (finder->uniqueList == NULL) {
-        return '#';  // Return '#' if no unique character exists
+    if (max_component_size == 0) {
+        return NULL; // No white object found
     }
-    return finder->uniqueList->character;
-}
 
-// Clean up memory
-void cleanupFinder(UniqueCharFinder* finder) {
-    CharNode* current = finder->uniqueList;
-    while (current != NULL) {
-        CharNode* temp = current;
-        current = current->next;
-        free(temp);
-    }
-    free(finder);
+    return object_pixels;
 }
 
 int main() {
-    // Create our unique character finder
-    UniqueCharFinder* finder = createFinder();
-    
-    // Test cases
-    printf("=== Starting Character Stream Processing ===\n");
-    
-    // Test Case 1: Single character
-    addCharacter(finder, 'a');
-    printf("First unique after 'a': %c\n", getFirstUnique(finder));
-    
-    // Test Case 2: Two different characters
-    addCharacter(finder, 'b');
-    printf("First unique after 'b': %c\n", getFirstUnique(finder));
-    
-    // Test Case 3: Repeated character
-    addCharacter(finder, 'a');
-    printf("First unique after second 'a': %c\n", getFirstUnique(finder));
-    
-    // Test Case 4: Add new character
-    addCharacter(finder, 'c');
-    printf("First unique after 'c': %c\n", getFirstUnique(finder));
-    
-    // Test Case 5: Another repeated character
-    addCharacter(finder, 'b');
-    printf("First unique after second 'b': %c\n", getFirstUnique(finder));
-    
-    // Clean up
-    cleanupFinder(finder);
-    
+    // Test example input mimicking the image (single white pixel)
+    int grid[ROWS][COLS] = {
+        {BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK},
+        {BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK},
+        {BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK},
+        {BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK},
+        {BLACK, BLACK, BLACK, BLACK, WHITE, BLACK, BLACK, BLACK, BLACK, BLACK},
+        {BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK},
+        {BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK},
+        {BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK},
+        {BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK},
+        {BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK}
+    };
+
+    int object_size;
+    Point* object_pixels = find_white_object(grid, &object_size);
+
+    if (object_pixels != NULL) {
+        printf("White object found with %d pixels:\n", object_size);
+        for (int i = 0; i < object_size; i++) {
+            printf("(%d, %d) ", object_pixels[i].row, object_pixels[i].col);
+        }
+        printf("\n");
+        free(object_pixels);
+    } else {
+        printf("No white object found.\n");
+    }
+
+    // Test example with a more complex shape
+    int grid2[ROWS][COLS] = {
+        {BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK},
+        {BLACK, BLACK, BLACK, BLACK, WHITE, BLACK, BLACK, BLACK, BLACK, BLACK},
+        {BLACK, BLACK, BLACK, WHITE, WHITE, WHITE, BLACK, BLACK, BLACK, BLACK},
+        {BLACK, BLACK, BLACK, BLACK, WHITE, BLACK, BLACK, BLACK, BLACK, BLACK},
+        {BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK},
+        {BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK},
+        {BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK},
+        {BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK},
+        {BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK},
+        {BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK}
+    };
+
+    object_pixels = find_white_object(grid2, &object_size);
+
+    if (object_pixels != NULL) {
+        printf("\nWhite object found with %d pixels in grid2:\n", object_size);
+        for (int i = 0; i < object_size; i++) {
+            printf("(%d, %d) ", object_pixels[i].row, object_pixels[i].col);
+        }
+        printf("\n");
+        free(object_pixels);
+    } else {
+        printf("No white object found in grid2.\n");
+    }
+
+    // Test example with multiple small white pixels (potential noise) and one larger object
+    int grid3[ROWS][COLS] = {
+        {WHITE, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK},
+        {BLACK, BLACK, WHITE, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK},
+        {BLACK, BLACK, BLACK, WHITE, WHITE, WHITE, BLACK, BLACK, BLACK, BLACK},
+        {BLACK, BLACK, BLACK, BLACK, WHITE, BLACK, BLACK, BLACK, BLACK, BLACK},
+        {BLACK, BLACK, BLACK, BLACK, WHITE, BLACK, BLACK, BLACK, WHITE, BLACK},
+        {BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK},
+        {BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK},
+        {BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK},
+        {BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK},
+        {BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, WHITE}
+    };
+
+    object_pixels = find_white_object(grid3, &object_size);
+
+    if (object_pixels != NULL) {
+        printf("\nWhite object found with %d pixels in grid3:\n", object_size);
+        for (int i = 0; i < object_size; i++) {
+            printf("(%d, %d) ", object_pixels[i].row, object_pixels[i].col);
+        }
+        printf("\n");
+        free(object_pixels);
+    } else {
+        printf("No white object found in grid3.\n");
+    }
+
     return 0;
 }
