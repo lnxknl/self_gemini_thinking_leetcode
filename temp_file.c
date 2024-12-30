@@ -1,75 +1,105 @@
-#include <stdio.h>
-#include <stdbool.h>
+   #include <stdio.h>
+   #include <stdlib.h>
 
-// Assume these represent the grid dimensions
-#define GRID_WIDTH 1000
-#define GRID_HEIGHT 1000
+   typedef struct {
+       int row;
+       int col;
+   } Coordinates;
 
-// Simulated sensor function (in a real scenario, this would interact with the environment)
-bool is_active(int x, int y) {
-    // In our simulated case, let's assume the beacon is at (500, 500)
-    return (x == 500 && y == 500);
-}
+   Coordinates findLostSignal(int** grid, int rows, int cols) {
+       Coordinates result = {-1, -1}; // Initialize to indicate not found
 
-// Function to check if any activity exists within a given rectangle
-bool has_activity(int min_x, int min_y, int max_x, int max_y) {
-    for (int y = min_y; y <= max_y; ++y) {
-        for (int x = min_x; x <= max_x; ++x) {
-            if (is_active(x, y)) {
-                return true;
-            }
-        }
-    }
-    return false;
-}
+       // Recursive helper function for divide and conquer
+       Coordinates findSignalRecursive(int** subgrid, int startRow, int startCol, int numRows, int numCols) {
+           if (numRows == 1 && numCols == 1) {
+               if (subgrid[0][0] == 1) {
+                   return (Coordinates){startRow, startCol};
+               } else {
+                   return (Coordinates){-1, -1};
+               }
+           }
 
-// Recursive function to find the active beacon
-bool find_beacon(int min_x, int min_y, int max_x, int max_y, int *beacon_x, int *beacon_y) {
-    // Base case: Single cell
-    if (min_x == max_x && min_y == max_y) {
-        if (is_active(min_x, min_y)) {
-            *beacon_x = min_x;
-            *beacon_y = min_y;
-            return true;
-        }
-        return false;
-    }
+           int midRow = numRows / 2;
+           int midCol = numCols / 2;
 
-    int mid_x = min_x + (max_x - min_x) / 2;
-    int mid_y = min_y + (max_y - min_y) / 2;
+           // Quadrant 1 (Top-Left)
+           int sumQ1 = 0;
+           for (int i = 0; i < midRow; i++) {
+               for (int j = 0; j < midCol; j++) {
+                   sumQ1 += subgrid[i][j];
+               }
+           }
+           if (sumQ1 == 1) {
+               return findSignalRecursive(subgrid, startRow, startCol, midRow, midCol);
+           }
 
-    // Quadrant 1 (top-left)
-    if (has_activity(min_x, min_y, mid_x, mid_y)) {
-        if (find_beacon(min_x, min_y, mid_x, mid_y, beacon_x, beacon_y)) return true;
-    }
+           // Quadrant 2 (Top-Right)
+           int sumQ2 = 0;
+           for (int i = 0; i < midRow; i++) {
+               for (int j = midCol; j < numCols; j++) {
+                   sumQ2 += subgrid[i][j];
+               }
+           }
+           if (sumQ2 == 1) {
+               return findSignalRecursive(&subgrid[0][midCol], startRow, startCol + midCol, midRow, numCols - midCol);
+           }
 
-    // Quadrant 2 (top-right)
-    if (has_activity(mid_x + 1, min_y, max_x, mid_y)) {
-        if (find_beacon(mid_x + 1, min_y, max_x, mid_y, beacon_x, beacon_y)) return true;
-    }
+           // Quadrant 3 (Bottom-Left)
+           int sumQ3 = 0;
+           for (int i = midRow; i < numRows; i++) {
+               for (int j = 0; j < midCol; j++) {
+                   sumQ3 += subgrid[i][j];
+               }
+           }
+           if (sumQ3 == 1) {
+               return findSignalRecursive(&subgrid[midRow][0], startRow + midRow, startCol, numRows - midRow, midCol);
+           }
 
-    // Quadrant 3 (bottom-left)
-    if (has_activity(min_x, mid_y + 1, mid_x, max_y)) {
-        if (find_beacon(min_x, mid_y + 1, mid_x, max_y, beacon_x, beacon_y)) return true;
-    }
+           // Quadrant 4 (Bottom-Right)
+           int sumQ4 = 0;
+           for (int i = midRow; i < numRows; i++) {
+               for (int j = midCol; j < numCols; j++) {
+                   sumQ4 += subgrid[i][j];
+               }
+           }
+           if (sumQ4 == 1) {
+               return findSignalRecursive(&subgrid[midRow][midCol], startRow + midRow, startCol + midCol, numRows - midRow, numCols - midCol);
+           }
 
-    // Quadrant 4 (bottom-right)
-    if (has_activity(mid_x + 1, mid_y + 1, max_x, max_y)) {
-        if (find_beacon(mid_x + 1, mid_y + 1, max_x, max_y, beacon_x, beacon_y)) return true;
-    }
+           return (Coordinates){-1, -1}; // Should not happen if signal exists
+       }
 
-    return false;
-}
+       return findSignalRecursive(grid, 0, 0, rows, cols);
+   }
 
-int main() {
-    int beacon_x = -1;
-    int beacon_y = -1;
+   int main() {
+       // Test Example Input
+       int rows = 10;
+       int cols = 15;
+       int** grid = (int**)malloc(rows * sizeof(int*));
+       for (int i = 0; i < rows; i++) {
+           grid[i] = (int*)malloc(cols * sizeof(int));
+           for (int j = 0; j < cols; j++) {
+               grid[i][j] = 0;
+           }
+       }
 
-    if (find_beacon(0, 0, GRID_WIDTH - 1, GRID_HEIGHT - 1, &beacon_x, &beacon_y)) {
-        printf("Beacon found at coordinates: (%d, %d)\n", beacon_x, beacon_y);
-    } else {
-        printf("Beacon not found.\n");
-    }
+       // Place the lost signal at a specific location
+       grid[3][7] = 1;
 
-    return 0;
-}
+       Coordinates signalLocation = findLostSignal(grid, rows, cols);
+
+       if (signalLocation.row != -1) {
+           printf("Lost signal found at row: %d, col: %d\n", signalLocation.row, signalLocation.col);
+       } else {
+           printf("Lost signal not found.\n");
+       }
+
+       // Free allocated memory
+       for (int i = 0; i < rows; i++) {
+           free(grid[i]);
+       }
+       free(grid);
+
+       return 0;
+   }
