@@ -61,7 +61,7 @@ int main() {
 
     // Simulate the data stream (replace with actual stream input)
     Point stream[] = {
-        {1, 2},
+        {5, 7},
         {5, 7},
         {1, 2}, // Duplicate
         {10, -5}, // Potential target
