@@ -1,117 +1,68 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
+#include <math.h>
 
-#define MAX_TASKS 100
+int maxConsecutiveEqual(int arr[], int n, int k) {
+    int left = 0;
+    int right = 0;
+    int max_length = 0;
+    int zeros = 0;
+    int ones = 0;
 
-typedef struct Task {
-    int id;
-    int duration;
-    int num_prerequisites;
-    int prerequisites[MAX_TASKS];
-    int in_degree;
-    int finish_time;
-} Task;
+    while (right < n) {
+        if (arr[right] == 0) {
+            zeros++;
+        } else {
+            ones++;
+        }
 
-int solve_tasks(Task tasks[], int num_tasks) {
-    int in_degree[MAX_TASKS] = {0};
-    int adj[MAX_TASKS][MAX_TASKS] = {0}; // Adjacency list for dependencies
-    int finish_times[MAX_TASKS];
-    int queue[MAX_TASKS];
-    int front = 0, rear = -1;
-    int processed_tasks = 0;
-    int max_finish_time = 0;
-
-    // Calculate in-degrees and build adjacency list
-    for (int i = 0; i < num_tasks; i++) {
-        for (int j = 0; j < tasks[i].num_prerequisites; j++) {
-            int prereq_id = tasks[i].prerequisites[j];
-            for (int k = 0; k < num_tasks; k++) {
-                if (tasks[k].id == prereq_id) {
-                    in_degree[i]++;
-                    // Find the index of the prerequisite task
-                    for (int l = 0; l < num_tasks; l++) {
-                        if (tasks[l].id == prereq_id) {
-                            adj[l][i] = 1; // Edge from prereq to current task
-                            break;
-                        }
-                    }
-                    break;
-                }
+        while (fmin(zeros, ones) > k) {
+            if (arr[left] == 0) {
+                zeros--;
+            } else {
+                ones--;
             }
+            left++;
         }
-        tasks[i].in_degree = in_degree[i];
-        finish_times[i] = 0;
-    }
 
-    // Initialize queue with tasks having in-degree 0
-    for (int i = 0; i < num_tasks; i++) {
-        if (tasks[i].in_degree == 0) {
-            queue[++rear] = i;
-            finish_times[i] = tasks[i].duration;
+        if (right - left + 1 > max_length) {
+            max_length = right - left + 1;
         }
+        right++;
     }
-
-    while (front <= rear) {
-        int current_task_index = queue[front++];
-        processed_tasks++;
-
-        for (int i = 0; i < num_tasks; i++) {
-            if (adj[current_task_index][i]) {
-                tasks[i].in_degree--;
-                if (tasks[i].in_degree == 0) {
-                    int max_prereq_finish_time = 0;
-                    for (int j = 0; j < tasks[i].num_prerequisites; j++) {
-                        int prereq_id = tasks[i].prerequisites[j];
-                        for (int k = 0; k < num_tasks; k++) {
-                            if (tasks[k].id == prereq_id) {
-                                if (finish_times[k] > max_prereq_finish_time) {
-                                    max_prereq_finish_time = finish_times[k];
-                                }
-                                break;
-                            }
-                        }
-                    }
-                    finish_times[i] = max_prereq_finish_time + tasks[i].duration;
-                    queue[++rear] = i;
-                }
-            }
-        }
-    }
-
-    if (processed_tasks != num_tasks) {
-        return -1; // Cycle detected
-    }
-
-    for (int i = 0; i < num_tasks; i++) {
-        if (finish_times[i] > max_finish_time) {
-            max_finish_time = finish_times[i];
-        }
-    }
-
-    return max_finish_time;
+    return max_length;
 }
 
 int main() {
-    Task tasks[] = {
-        {1, 3, 0, {}, 0, 0},
-        {2, 2, 1, {1}, 0, 0},
-        {3, 4, 1, {1}, 0, 0},
-        {4, 1, 2, {2, 3}, 0, 0}
-    };
-    int num_tasks = sizeof(tasks) / sizeof(tasks[0]);
+    // Test Example 1
+    int arr1[] = {1, 1, 0, 0, 1, 1, 1, 0};
+    int n1 = sizeof(arr1) / sizeof(arr1[0]);
+    int k1 = 1;
+    printf("Test Case 1: Maximum consecutive equal elements with %d change(s) = %d\n", k1, maxConsecutiveEqual(arr1, n1, k1)); // Expected output: 6 (1,1,1,1,1,1 or 0,0,0,0,0,0)
 
-    int result = solve_tasks(tasks, num_tasks);
-    printf("Minimum time to complete all tasks: %d\n", result); // Expected output: 10
+    // Test Example 2
+    int arr2[] = {0, 0, 1, 1, 0, 0, 1, 1, 0, 0};
+    int n2 = sizeof(arr2) / sizeof(arr2[0]);
+    int k2 = 2;
+    printf("Test Case 2: Maximum consecutive equal elements with %d change(s) = %d\n", k2, maxConsecutiveEqual(arr2, n2, k2)); // Expected output: 8
 
-    // Example with a cycle
-    Task tasks_cycle[] = {
-        {1, 3, 1, {2}, 0, 0},
-        {2, 2, 1, {1}, 0, 0}
-    };
-    num_tasks = sizeof(tasks_cycle) / sizeof(tasks_cycle[0]);
-    result = solve_tasks(tasks_cycle, num_tasks);
-    printf("Minimum time to complete all tasks (cycle): %d\n", result); // Expected output: -1
+    // Test Example 3
+    int arr3[] = {1, 0, 1, 0, 1};
+    int n3 = sizeof(arr3) / sizeof(arr3[0]);
+    int k3 = 0;
+    printf("Test Case 3: Maximum consecutive equal elements with %d change(s) = %d\n", k3, maxConsecutiveEqual(arr3, n3, k3)); // Expected output: 1
+
+    // Test Example 4 (All same)
+    int arr4[] = {1, 1, 1, 1, 1};
+    int n4 = sizeof(arr4) / sizeof(arr4[0]);
+    int k4 = 0;
+    printf("Test Case 4: Maximum consecutive equal elements with %d change(s) = %d\n", k4, maxConsecutiveEqual(arr4, n4, k4)); // Expected output: 5
+
+    // Test Example 5 (Empty array)
+    int arr5[] = {};
+    int n5 = sizeof(arr5) / sizeof(arr5[0]);
+    int k5 = 2;
+    printf("Test Case 5: Maximum consecutive equal elements with %d change(s) = %d\n", k5, maxConsecutiveEqual(arr5, n5, k5)); // Expected output: 0
 
     return 0;
 }
