@@ -1,92 +1,128 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-// Disjoint Set Union (DSU) structure
+/*
+ * This program solves a network connection problem:
+ * - We have a network with some nodes already connected in pairs
+ * - We also have some "lonely" nodes that need to be connected to the network
+ * - The goal is to find the minimum number of new connections needed
+ */
+
+// Structure to manage groups of connected nodes
 typedef struct {
-    int *parent;
-    int *rank;
-} DSU;
+    int* parent;  // Array to track parent of each node
+    int* rank;    // Array to optimize tree height in union operations
+} NetworkGroups;
 
-DSU* createDSU(int num_nodes) {
-    DSU* dsu = (DSU*)malloc(sizeof(DSU));
-    dsu->parent = (int*)malloc(num_nodes * sizeof(int));
-    dsu->rank = (int*)malloc(num_nodes * sizeof(int));
-    for (int i = 0; i < num_nodes; i++) {
-        dsu->parent[i] = i;
-        dsu->rank[i] = 0;
+// Create and initialize network groups data structure
+NetworkGroups* createNetworkGroups(int total_nodes) {
+    NetworkGroups* groups = (NetworkGroups*)malloc(sizeof(NetworkGroups));
+    if (!groups) {
+        printf("Memory allocation failed!\n");
+        exit(1);
     }
-    return dsu;
+
+    // Allocate arrays for parent and rank
+    groups->parent = (int*)malloc(total_nodes * sizeof(int));
+    groups->rank = (int*)malloc(total_nodes * sizeof(int));
+    
+    if (!groups->parent || !groups->rank) {
+        printf("Memory allocation failed!\n");
+        exit(1);
+    }
+
+    // Initialize: each node starts in its own group
+    for (int i = 0; i < total_nodes; i++) {
+        groups->parent[i] = i;  // Each node is its own parent
+        groups->rank[i] = 0;    // Initial rank is 0
+    }
+
+    return groups;
 }
 
-int find(DSU* dsu, int i) {
-    if (dsu->parent[i] == i)
-        return i;
-    return dsu->parent[i] = find(dsu, dsu->parent[i]); // Path compression
+// Find which group a node belongs to (with path compression)
+int findGroup(NetworkGroups* groups, int node) {
+    // If node is not its own parent, recursively find the root parent
+    if (groups->parent[node] != node) {
+        // Path compression: make all nodes in path point directly to root
+        groups->parent[node] = findGroup(groups, groups->parent[node]);
+    }
+    return groups->parent[node];
 }
 
-void unionSets(DSU* dsu, int a, int b) {
-    int rootA = find(dsu, a);
-    int rootB = find(dsu, b);
-    if (rootA != rootB) {
-        if (dsu->rank[rootA] < dsu->rank[rootB])
-            dsu->parent[rootA] = rootB;
-        else if (dsu->rank[rootA] > dsu->rank[rootB])
-            dsu->parent[rootB] = rootA;
-        else {
-            dsu->parent[rootB] = rootA;
-            dsu->rank[rootA]++;
-        }
+// Connect two nodes into the same group
+void connectNodes(NetworkGroups* groups, int node1, int node2) {
+    int group1 = findGroup(groups, node1);
+    int group2 = findGroup(groups, node2);
+
+    // If nodes are already in the same group, do nothing
+    if (group1 == group2) return;
+
+    // Union by rank: attach smaller rank tree under root of higher rank tree
+    if (groups->rank[group1] < groups->rank[group2]) {
+        groups->parent[group1] = group2;
+    }
+    else if (groups->rank[group1] > groups->rank[group2]) {
+        groups->parent[group2] = group1;
+    }
+    else {
+        // If ranks are equal, make one root point to the other
+        groups->parent[group2] = group1;
+        groups->rank[group1]++;
     }
 }
 
-int minConnections(int num_nodes, int connections[][2], int num_connections, int lonely_nodes[], int num_lonely) {
-    DSU* dsu = createDSU(num_nodes);
+// Calculate minimum connections needed
+int calculateMinConnections(int total_nodes, int connections[][2], int num_connections, 
+                          int lonely_nodes[], int num_lonely) {
+    // Create network groups
+    NetworkGroups* groups = createNetworkGroups(total_nodes);
 
-    // Build connected components
+    // Process existing connections
     for (int i = 0; i < num_connections; i++) {
-        unionSets(dsu, connections[i][0], connections[i][1]);
+        connectNodes(groups, connections[i][0], connections[i][1]);
     }
 
-    // Find the largest connected component size (not strictly needed for this specific problem, but good practice)
-    int max_component_size = 0;
-    int* component_sizes = (int*)calloc(num_nodes, sizeof(int)); // Use representative as index
+    // Clean up
+    free(groups->parent);
+    free(groups->rank);
+    free(groups);
 
-    for (int i = 0; i < num_nodes; i++) {
-        component_sizes[find(dsu, i)]++;
-    }
-
-    for (int i = 0; i < num_nodes; i++) {
-        if (component_sizes[i] > max_component_size) {
-            max_component_size = component_sizes[i];
-        }
-    }
-    free(component_sizes);
-    free(dsu->parent);
-    free(dsu->rank);
-    free(dsu);
-
-    // The minimum connections needed is simply the number of lonely nodes.
+    // For this specific problem, the minimum connections needed
+    // is simply the number of lonely nodes, as each lonely node
+    // needs exactly one connection to join the network
     return num_lonely;
 }
 
 int main() {
-    int num_nodes = 10;
-    int connections[][2] = {{0, 1}, {2, 3}, {4, 5}, {6, 7}, {8, 9}};
+    // Example network setup
+    int total_nodes = 10;
+    
+    // Existing connections in the network (pairs of connected nodes)
+    int connections[][2] = {
+        {0, 1},  // Node 0 is connected to Node 1
+        {2, 3},  // Node 2 is connected to Node 3
+        {4, 5},  // and so on...
+        {6, 7},
+        {8, 9}
+    };
     int num_connections = sizeof(connections) / sizeof(connections[0]);
-    int lonely_nodes[] = {10, 11, 12}; // Assuming node numbering can extend
+
+    // Nodes that need to be connected to the network
+    int lonely_nodes[] = {10, 11, 12};
     int num_lonely = sizeof(lonely_nodes) / sizeof(lonely_nodes[0]);
 
-    // Adjust num_nodes if lonely nodes extend beyond initial range
-    int max_node = num_nodes - 1;
-    for(int i = 0; i < num_lonely; i++) {
-        if (lonely_nodes[i] > max_node) {
-            max_node = lonely_nodes[i];
+    // Adjust total_nodes if lonely nodes have higher numbers
+    for (int i = 0; i < num_lonely; i++) {
+        if (lonely_nodes[i] >= total_nodes) {
+            total_nodes = lonely_nodes[i] + 1;
         }
     }
-    num_nodes = max_node + 1;
 
-    int result = minConnections(num_nodes, connections, num_connections, lonely_nodes, num_lonely);
-    printf("Minimum connections required: %d\n", result);
+    // Calculate and print result
+    int min_connections = calculateMinConnections(total_nodes, connections, 
+                                                num_connections, lonely_nodes, num_lonely);
+    printf("Minimum new connections needed: %d\n", min_connections);
 
     return 0;
 }
