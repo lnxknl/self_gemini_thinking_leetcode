@@ -1,102 +1,75 @@
 #include <stdio.h>
-#include <stdlib.h>
 #include <stdbool.h>
 
-// Define a structure to represent a data point
-typedef struct {
-    int x;
-    int y;
-} Point;
+// Assume these represent the grid dimensions
+#define GRID_WIDTH 1000
+#define GRID_HEIGHT 1000
 
-// A simple hash table implementation (for demonstration purposes)
-#define HASH_TABLE_SIZE 1000
-
-typedef struct HashTableEntry {
-    Point key;
-    bool exists;
-    struct HashTableEntry* next;
-} HashTableEntry;
-
-HashTableEntry* hashTable[HASH_TABLE_SIZE];
-
-// Hash function (simple modulo)
-unsigned int hash(Point p) {
-    // Combine x and y to create a better distribution
-    unsigned int combined = (p.x * 31) ^ p.y;
-    return combined % HASH_TABLE_SIZE;
+// Simulated sensor function (in a real scenario, this would interact with the environment)
+bool is_active(int x, int y) {
+    // In our simulated case, let's assume the beacon is at (500, 500)
+    return (x == 500 && y == 500);
 }
 
-// Insert a point into the hash table
-void insert(Point p) {
-    unsigned int index = hash(p);
-    HashTableEntry* newEntry = (HashTableEntry*)malloc(sizeof(HashTableEntry));
-    if (!newEntry) {
-        perror("Memory allocation failed");
-        exit(EXIT_FAILURE);
-    }
-    newEntry->key = p;
-    newEntry->exists = true;
-    newEntry->next = hashTable[index];
-    hashTable[index] = newEntry;
-}
-
-// Search for a point in the hash table
-bool search(Point p) {
-    unsigned int index = hash(p);
-    HashTableEntry* current = hashTable[index];
-    while (current != NULL) {
-        if (current->key.x == p.x && current->key.y == p.y) {
-            return true;
+// Function to check if any activity exists within a given rectangle
+bool has_activity(int min_x, int min_y, int max_x, int max_y) {
+    for (int y = min_y; y <= max_y; ++y) {
+        for (int x = min_x; x <= max_x; ++x) {
+            if (is_active(x, y)) {
+                return true;
+            }
         }
-        current = current->next;
     }
     return false;
 }
 
-int main() {
-    // Initialize the hash table
-    for (int i = 0; i < HASH_TABLE_SIZE; i++) {
-        hashTable[i] = NULL;
-    }
-
-    // Simulate the data stream (replace with actual stream input)
-    Point stream[] = {
-        {5, 7},
-        {5, 7},
-        {1, 2}, // Duplicate
-        {10, -5}, // Potential target
-        {5, 7},  // Duplicate
-        {12, 3}
-        // ... potentially many more data points
-    };
-    
-    int streamSize = sizeof(stream) / sizeof(stream[0]);
-
-    Point target = {-1, -1}; // Initialize target
-
-    printf("Processing data stream...\n");
-
-    for (int i = 0; i < streamSize; i++) {
-        Point currentPoint = stream[i];
-        printf("Received point: (%d, %d)\n", currentPoint.x, currentPoint.y);
-
-        if (!search(currentPoint)) {
-            printf("Potential target found: (%d, %d)\n", currentPoint.x, currentPoint.y);
-            target = currentPoint;
-            break; // Target found, terminate processing
-        } else {
-            printf("Duplicate point encountered.\n");
+// Recursive function to find the active beacon
+bool find_beacon(int min_x, int min_y, int max_x, int max_y, int *beacon_x, int *beacon_y) {
+    // Base case: Single cell
+    if (min_x == max_x && min_y == max_y) {
+        if (is_active(min_x, min_y)) {
+            *beacon_x = min_x;
+            *beacon_y = min_y;
+            return true;
         }
-        insert(currentPoint);
+        return false;
     }
 
-    if (target.x != -1) {
-        printf("\nTarget data point located at: (%d, %d)\n", target.x, target.y);
+    int mid_x = min_x + (max_x - min_x) / 2;
+    int mid_y = min_y + (max_y - min_y) / 2;
+
+    // Quadrant 1 (top-left)
+    if (has_activity(min_x, min_y, mid_x, mid_y)) {
+        if (find_beacon(min_x, min_y, mid_x, mid_y, beacon_x, beacon_y)) return true;
+    }
+
+    // Quadrant 2 (top-right)
+    if (has_activity(mid_x + 1, min_y, max_x, mid_y)) {
+        if (find_beacon(mid_x + 1, min_y, max_x, mid_y, beacon_x, beacon_y)) return true;
+    }
+
+    // Quadrant 3 (bottom-left)
+    if (has_activity(min_x, mid_y + 1, mid_x, max_y)) {
+        if (find_beacon(min_x, mid_y + 1, mid_x, max_y, beacon_x, beacon_y)) return true;
+    }
+
+    // Quadrant 4 (bottom-right)
+    if (has_activity(mid_x + 1, mid_y + 1, max_x, max_y)) {
+        if (find_beacon(mid_x + 1, mid_y + 1, max_x, max_y, beacon_x, beacon_y)) return true;
+    }
+
+    return false;
+}
+
+int main() {
+    int beacon_x = -1;
+    int beacon_y = -1;
+
+    if (find_beacon(0, 0, GRID_WIDTH - 1, GRID_HEIGHT - 1, &beacon_x, &beacon_y)) {
+        printf("Beacon found at coordinates: (%d, %d)\n", beacon_x, beacon_y);
     } else {
-        printf("\nTarget data point not found in the processed stream.\n");
+        printf("Beacon not found.\n");
     }
-
-    // Basic cleanup (free allocated memory in hash table - omitted for brevity)
 
     return 0;
 }
