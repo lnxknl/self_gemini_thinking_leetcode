@@ -5,7 +5,8 @@
 
 // Structure to represent coordinates
 typedef struct {
-    int x;  // This will be our key field
+    int key[2];  // Combined key of x and y
+    int x;
     int y;
     UT_hash_handle hh;
 } Coordinate;
@@ -60,24 +61,26 @@ QueueNode* dequeue(Queue* q) {
 
 // Function to check if coordinates are already visited
 bool isVisited(int x, int y) {
-    Coordinate temp = {.x = x, .y = y};
+    int key[2] = {x, y};
     Coordinate *c;
-    HASH_FIND(hh, visited, &temp.x, sizeof(int), c);
+    HASH_FIND(hh, visited, key, sizeof(key), c);
     return c != NULL;
 }
 
 // Function to mark coordinates as visited
 void markVisited(int x, int y) {
     Coordinate *c = (Coordinate*)malloc(sizeof(Coordinate));
+    c->key[0] = x;
+    c->key[1] = y;
     c->x = x;
     c->y = y;
-    HASH_ADD(hh, visited, x, sizeof(int), c);
+    HASH_ADD(hh, visited, key, sizeof(c->key), c);
 }
 
 // Function to check if coordinates are within bounds
 bool isInBounds(int x, int y) {
-    // Set reasonable bounds for the search area
-    const int BOUND = 100;  // Search within -100 to +100 for both x and y
+    // Increase bounds to ensure we can reach the target
+    const int BOUND = 1000;  // Increased bound to make sure we can reach (-5, 3)
     return x >= -BOUND && x <= BOUND && y >= -BOUND && y <= BOUND;
 }
 
@@ -88,24 +91,34 @@ bool check(int x, int y, int signal_x, int signal_y) {
 
 // Function to find the signal
 bool findSignal(int* signal_x_out, int* signal_y_out, int signal_x_target, int signal_y_target) {
+    printf("Searching for signal at target coordinates: (%d, %d)\n", signal_x_target, signal_y_target);
+    
     // First check if target is within bounds
     if (!isInBounds(signal_x_target, signal_y_target)) {
+        printf("Target is out of bounds!\n");
         return false;
     }
 
     Queue* q = createQueue();
     enqueue(q, 0, 0);
     markVisited(0, 0);
+    int steps = 0;
 
     while (!isEmpty(q)) {
         QueueNode* current = dequeue(q);
         int x = current->x;
         int y = current->y;
-        free(current);
+        steps++;
+        
+        if (steps % 1000 == 0) {
+            printf("Searched %d positions. Current position: (%d, %d)\n", steps, x, y);
+        }
 
         if (check(x, y, signal_x_target, signal_y_target)) {
+            printf("Found signal at (%d, %d) after %d steps!\n", x, y, steps);
             *signal_x_out = x;
             *signal_y_out = y;
+            free(current);
             return true;
         }
 
@@ -121,8 +134,10 @@ bool findSignal(int* signal_x_out, int* signal_y_out, int signal_x_target, int s
                 markVisited(nx, ny);
             }
         }
+        free(current);
     }
 
+    printf("Signal not found after %d steps.\n", steps);
     return false;
 }
 
