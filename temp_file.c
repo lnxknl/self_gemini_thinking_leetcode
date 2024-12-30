@@ -1,75 +1,121 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <limits.h> // For INT_MIN
+#include <string.h>
+#include <time.h>
 
-// Structure to represent a coordinate
+// Define event types
+typedef enum {
+    JOIN,
+    LEAVE,
+    MESSAGE,
+    MENTION
+} EventType;
+
+// Structure for an event
 typedef struct {
-    int row;
-    int col;
-    int value;
-} Point;
+    time_t timestamp;
+    EventType event_type;
+    int user_id;
+    // Add more specific data if needed
+} Event;
 
-// A very basic (and inefficient for large scale) way to simulate a hash table
-// In real-world scenarios, you'd use a proper hash table implementation.
-#define MAX_POINTS 100
-Point hashTable[MAX_POINTS];
-int hashTableSize = 0;
+// Structure for user data
+typedef struct UserData {
+    int message_count_window;
+    int join_leave_count_window;
+    int mention_count_window;
+    // Consider using a linked list for event history if needed for more detailed analysis
+} UserData;
 
-// Simple hash function (can be improved)
-int hash(int row, int col) {
-    return (row * 31 + col) % MAX_POINTS;
-}
+// Simple hash table implementation (for demonstration purposes, a more robust implementation is needed for production)
+#define MAX_USERS 10000
+UserData user_data[MAX_USERS];
+int user_initialized[MAX_USERS] = {0};
 
-// Function to add a point to the hash table (handles collisions naively)
-void addPoint(Point p) {
-    int index = hash(p.row, p.col);
-    // Naive collision handling: linear probing
-    while (hashTable[index].row != -1 && hashTable[index].col != -1) {
-        index = (index + 1) % MAX_POINTS;
-    }
-    hashTable[index] = p;
-    hashTableSize++;
-}
+// Time window for anomaly detection (in seconds)
+#define TIME_WINDOW 60
 
-// Function to find the brightest point seen so far
-Point findBrightest(Point* points, int numPoints) {
-    // Initialize the hash table with "empty" markers
-    for (int i = 0; i < MAX_POINTS; i++) {
-        hashTable[i].row = -1;
-        hashTable[i].col = -1;
-        hashTable[i].value = 0;
-    }
-    hashTableSize = 0;
+// Anomaly thresholds (example values, these would need tuning)
+#define MESSAGE_FREQUENCY_THRESHOLD 5
+#define JOIN_LEAVE_FREQUENCY_THRESHOLD 3
+#define MENTION_COUNT_THRESHOLD 10
 
-    Point brightest = {-1, -1, INT_MIN};
+// Function to process an event
+void process_event(Event event) {
+    int user_id = event.user_id;
 
-    for (int i = 0; i < numPoints; i++) {
-        addPoint(points[i]); // Add to our "hash table"
-        if (points[i].value > brightest.value) {
-            brightest = points[i];
+    if (user_id >= 0 && user_id < MAX_USERS) {
+        if (!user_initialized[user_id]) {
+            memset(&user_data[user_id], 0, sizeof(UserData));
+            user_initialized[user_id] = 1;
+        }
+
+        switch (event.event_type) {
+            case JOIN:
+            case LEAVE:
+                user_data[user_id].join_leave_count_window++;
+                break;
+            case MESSAGE:
+                user_data[user_id].message_count_window++;
+                break;
+            case MENTION:
+                user_data[user_id].mention_count_window++;
+                break;
         }
     }
-    return brightest;
+}
+
+// Function to detect anomalies within the time window
+void detect_anomalies() {
+    printf("--- Anomaly Detection ---\n");
+    for (int i = 0; i < MAX_USERS; i++) {
+        if (user_initialized[i]) {
+            if (user_data[i].message_count_window > MESSAGE_FREQUENCY_THRESHOLD) {
+                printf("User %d: High message frequency (%d)\n", i, user_data[i].message_count_window);
+            }
+            if (user_data[i].join_leave_count_window > JOIN_LEAVE_FREQUENCY_THRESHOLD) {
+                printf("User %d: High join/leave frequency (%d)\n", i, user_data[i].join_leave_count_window);
+            }
+            if (user_data[i].mention_count_window > MENTION_COUNT_THRESHOLD) {
+                printf("User %d: High mention count (%d)\n", i, user_data[i].mention_count_window);
+            }
+            // Reset window counters after detection (or at intervals)
+            user_data[i].message_count_window = 0;
+            user_data[i].join_leave_count_window = 0;
+            user_data[i].mention_count_window = 0;
+        }
+    }
 }
 
 int main() {
-    // Example input with multiple potentially bright points
-    Point input[] = {
-        {1, 2, 3},
-        {3, 4, 5},
-        {5, 7, 10}, // Brightest point
-        {8, 9, 2},
-        {2, 3, 7}
+    // Example event stream
+    Event events[] = {
+        {time(NULL), JOIN, 1},
+        {time(NULL) + 5, MESSAGE, 1},
+        {time(NULL) + 10, MESSAGE, 1},
+        {time(NULL) + 12, MESSAGE, 1},
+        {time(NULL) + 15, MESSAGE, 1},
+        {time(NULL) + 18, MESSAGE, 1},
+        {time(NULL) + 20, JOIN, 2},
+        {time(NULL) + 22, LEAVE, 2},
+        {time(NULL) + 25, MENTION, 3},
+        {time(NULL) + 26, MENTION, 3},
+        {time(NULL) + 27, MENTION, 3},
+        {time(NULL) + 28, MENTION, 3},
+        {time(NULL) + 29, MENTION, 3},
+        {time(NULL) + 30, MENTION, 3},
+        {time(NULL) + 31, MENTION, 3},
+        {time(NULL) + 32, MENTION, 3},
+        {time(NULL) + 33, MENTION, 3},
+        {time(NULL) + 35, MESSAGE, 4},
     };
-    int numPoints = sizeof(input) / sizeof(input[0]);
+    int num_events = sizeof(events) / sizeof(events[0]);
 
-    Point brightest = findBrightest(input, numPoints);
-
-    if (brightest.row != -1) {
-        printf("Brightest point found at: (%d, %d) with value %d\n", brightest.row, brightest.col, brightest.value);
-    } else {
-        printf("No bright points found.\n");
+    for (int i = 0; i < num_events; i++) {
+        process_event(events[i]);
     }
+
+    detect_anomalies();
 
     return 0;
 }
