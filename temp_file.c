@@ -74,6 +74,13 @@ void markVisited(int x, int y) {
     HASH_ADD(hh, visited, x, sizeof(int), c);
 }
 
+// Function to check if coordinates are within bounds
+bool isInBounds(int x, int y) {
+    // Set reasonable bounds for the search area
+    const int BOUND = 100;  // Search within -100 to +100 for both x and y
+    return x >= -BOUND && x <= BOUND && y >= -BOUND && y <= BOUND;
+}
+
 // Simulated check function (for testing)
 bool check(int x, int y, int signal_x, int signal_y) {
     return x == signal_x && y == signal_y;
@@ -81,6 +88,11 @@ bool check(int x, int y, int signal_x, int signal_y) {
 
 // Function to find the signal
 bool findSignal(int* signal_x_out, int* signal_y_out, int signal_x_target, int signal_y_target) {
+    // First check if target is within bounds
+    if (!isInBounds(signal_x_target, signal_y_target)) {
+        return false;
+    }
+
     Queue* q = createQueue();
     enqueue(q, 0, 0);
     markVisited(0, 0);
@@ -104,14 +116,14 @@ bool findSignal(int* signal_x_out, int* signal_y_out, int signal_x_target, int s
         for (int i = 0; i < 4; i++) {
             int nx = x + dx[i];
             int ny = y + dy[i];
-            if (!isVisited(nx, ny)) {
+            if (isInBounds(nx, ny) && !isVisited(nx, ny)) {
                 enqueue(q, nx, ny);
                 markVisited(nx, ny);
             }
         }
     }
 
-    return false; // Signal not found (should not happen with the problem constraints)
+    return false;
 }
 
 int main() {
