@@ -5,7 +5,7 @@
 
 // Structure to represent coordinates
 typedef struct {
-    int x;
+    int x;  // This will be our key field
     int y;
     UT_hash_handle hh;
 } Coordinate;
@@ -60,13 +60,10 @@ QueueNode* dequeue(Queue* q) {
 
 // Function to check if coordinates are already visited
 bool isVisited(int x, int y) {
+    Coordinate temp = {.x = x, .y = y};
     Coordinate *c;
-    HASH_FIND(hh, visited, &x, sizeof(int), c);
-    if (c) {
-        return true;
-    } else {
-        return false;
-    }
+    HASH_FIND(hh, visited, &temp.x, sizeof(int), c);
+    return c != NULL;
 }
 
 // Function to mark coordinates as visited
@@ -74,7 +71,7 @@ void markVisited(int x, int y) {
     Coordinate *c = (Coordinate*)malloc(sizeof(Coordinate));
     c->x = x;
     c->y = y;
-    HASH_ADD(hh, visited, &c->x, sizeof(int), c);
+    HASH_ADD(hh, visited, x, sizeof(int), c);
 }
 
 // Simulated check function (for testing)
