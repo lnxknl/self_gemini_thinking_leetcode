@@ -20,39 +20,19 @@ bool mightContainStar(int min_x, int max_x, int min_y, int max_y) {
 }
 
 void findStar(int min_x, int max_x, int min_y, int max_y, int* star_x, int* star_y) {
-    // Base case: single point to check
-    if (min_x == max_x && min_y == max_y) {
-        if (isStar(min_x, min_y)) {
-            *star_x = min_x;
-            *star_y = min_y;
+    // Try each point in the region
+    for (int x = min_x; x <= max_x; x++) {
+        for (int y = min_y; y <= max_y; y++) {
+            if (isStar(x, y)) {
+                *star_x = x;
+                *star_y = y;
+                return;
+            }
         }
-        return;
     }
-
-    int mid_x = min_x + (max_x - min_x) / 2;
-    int mid_y = min_y + (max_y - min_y) / 2;
-
-    // Check each quadrant in clockwise order
-    if (mightContainStar(min_x, mid_x, min_y, mid_y)) {
-        *star_x = -1;  // Reset before recursive call
-        findStar(min_x, mid_x, min_y, mid_y, star_x, star_y);
-        if (*star_x != -1) return;
-    }
-    if (mightContainStar(mid_x + 1, max_x, min_y, mid_y)) {
-        *star_x = -1;  // Reset before recursive call
-        findStar(mid_x + 1, max_x, min_y, mid_y, star_x, star_y);
-        if (*star_x != -1) return;
-    }
-    if (mightContainStar(min_x, mid_x, mid_y + 1, max_y)) {
-        *star_x = -1;  // Reset before recursive call
-        findStar(min_x, mid_x, mid_y + 1, max_y, star_x, star_y);
-        if (*star_x != -1) return;
-    }
-    if (mightContainStar(mid_x + 1, max_x, mid_y + 1, max_y)) {
-        *star_x = -1;  // Reset before recursive call
-        findStar(mid_x + 1, max_x, mid_y + 1, max_y, star_x, star_y);
-        if (*star_x != -1) return;
-    }
+    // If no star found, set coordinates to -1
+    *star_x = -1;
+    *star_y = -1;
 }
 
 int main() {
