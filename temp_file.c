@@ -1,96 +1,93 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <stdbool.h>
 
-#define MAX_STEPS 100 // Limit to prevent infinite loops
-
+// Structure to represent a suspect
 typedef struct {
-    int position;
-    int velocity; // Positive for right, negative for left
-} Car;
+    int id;
+    char clothing_color[20];
+    char gender[10];
+    char hair_color[20];
+    int approximate_age;
+} Suspect;
 
-bool canReachDestination(int road_length, int m_start, int m_end, Car cars[], int num_cars) {
-    int m_pos = m_start;
-    int time_step = 0;
+// Structure to represent a witness report
+typedef struct {
+    char clothing_color[20];
+    char gender[10];
+    char hair_color[20];
+    int approximate_age;
+    bool has_clothing_color;
+    bool has_gender;
+    bool has_hair_color;
+    bool has_approximate_age;
+} WitnessReport;
 
-    while (m_pos != m_end && time_step < MAX_STEPS) {
-        time_step++;
+// Function to calculate a match score between a suspect and a witness report
+int calculate_match_score(const Suspect *suspect, const WitnessReport *report) {
+    int score = 0;
 
-        // 1. Move the cars
-        for (int i = 0; i < num_cars; i++) {
-            cars[i].position += cars[i].velocity;
+    if (report->has_clothing_color && strcmp(suspect->clothing_color, report->clothing_color) == 0) {
+        score++;
+    }
+    if (report->has_gender && strcmp(suspect->gender, report->gender) == 0) {
+        score++;
+    }
+    if (report->has_hair_color && strcmp(suspect->hair_color, report->hair_color) == 0) {
+        score++;
+    }
+    if (report->has_approximate_age && suspect->approximate_age == report->approximate_age) {
+        score++;
+    }
+    return score;
+}
+
+// Function to identify the most likely culprit
+int identify_culprit(const Suspect suspects[], int num_suspects, const WitnessReport reports[], int num_reports) {
+    int best_match_id = -1;
+    int max_score = -1;
+
+    for (int i = 0; i < num_suspects; i++) {
+        int current_score = 0;
+        for (int j = 0; j < num_reports; j++) {
+            current_score += calculate_match_score(&suspects[i], &reports[j]);
         }
 
-        // 2. Determine motorcycle's next move (greedy approach)
-        int next_m_pos = m_pos;
-        if (m_pos < m_end) {
-            next_m_pos++;
-        } else if (m_pos > m_end) {
-            next_m_pos--;
-        }
-
-        // 3. Check for potential collision at the next motorcycle position
-        bool collision_imminent = false;
-        for (int i = 0; i < num_cars; i++) {
-            if (cars[i].position == next_m_pos) {
-                collision_imminent = true;
-                break;
-            }
-        }
-
-        // 4. Move the motorcycle if no immediate collision
-        if (!collision_imminent) {
-            m_pos = next_m_pos;
-        } else {
-            // If collision is imminent, consider staying or moving backward (simple avoidance)
-            bool can_stay = true;
-            for (int i = 0; i < num_cars; i++) {
-                if (cars[i].position == m_pos) {
-                    can_stay = false;
-                    break;
-                }
-            }
-
-            if (!can_stay && m_pos > 0) { // Try moving backward if possible
-                bool collision_backward = false;
-                for (int i = 0; i < num_cars; i++) {
-                    if (cars[i].position == m_pos - 1) {
-                        collision_backward = true;
-                        break;
-                    }
-                }
-                if (!collision_backward) {
-                    m_pos--;
-                }
-            }
-        }
-
-        // 5. Check for collision at the current motorcycle position
-        for (int i = 0; i < num_cars; i++) {
-            if (cars[i].position == m_pos) {
-                return false; // Collision occurred
-            }
+        if (current_score > max_score) {
+            max_score = current_score;
+            best_match_id = suspects[i].id;
+        } else if (current_score == max_score && max_score != -1) {
+            // Handle ties - for simplicity, we'll return -1 if there's a tie
+            return -1;
         }
     }
 
-    return m_pos == m_end;
+    return best_match_id;
 }
 
 int main() {
-    int road_length = 10;
-    int m_start = 1;
-    int m_end = 8;
-
-    Car cars[] = {
-        { .position = 4, .velocity = 1 },
-        { .position = 6, .velocity = -1 }
+    // Example Input
+    Suspect suspects[] = {
+        {1, "blue", "male", "black", 30},
+        {2, "white", "male", "brown", 25},
+        {3, "red", "female", "blonde", 35}
     };
-    int num_cars = sizeof(cars) / sizeof(cars[0]);
+    int num_suspects = sizeof(suspects) / sizeof(suspects[0]);
 
-    if (canReachDestination(road_length, m_start, m_end, cars, num_cars)) {
-        printf("Motorcycle can reach the destination.\n");
+    WitnessReport reports[] = {
+        {"blue", "male", "", 0, true, true, false, false}, // Witness saw blue shirt and male
+        {"", "", "black", 30, false, false, true, true}, // Witness saw black hair and age 30
+        {"blue", "", "", 0, true, false, false, false}  // Witness saw blue shirt
+    };
+    int num_reports = sizeof(reports) / sizeof(reports[0]);
+
+    int culprit_id = identify_culprit(suspects, num_suspects, reports, num_reports);
+
+    if (culprit_id != -1) {
+        printf("Most likely culprit ID: %d\n", culprit_id);
     } else {
-        printf("Motorcycle cannot reach the destination.\n");
+        printf("Could not identify a single culprit.\n");
     }
 
     return 0;
