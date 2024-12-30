@@ -1,63 +1,38 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-typedef struct {
-    int row;
-    int col;
-} Coordinates;
-
-Coordinates findSourceNode(int** grid, int rows, int cols) {
-    Coordinates source = {-1, -1}; // Initialize with invalid coordinates
-
-    for (int i = 0; i < rows; i++) {
-        for (int j = 0; j < cols; j++) {
-            if (grid[i][j] == 1) {
-                source.row = i;
-                source.col = j;
-                return source;
-            }
-        }
+int singleNumber(int* nums, int numsSize) {
+    int result = 0;
+    for (int i = 0; i < numsSize; i++) {
+        result ^= nums[i];
     }
-    return source;
+    return result;
 }
 
 int main() {
-    // Test Example Input
-    int rows = 5;
-    int cols = 7;
-    int** grid = (int**)malloc(rows * sizeof(int*));
-    for (int i = 0; i < rows; i++) {
-        grid[i] = (int*)malloc(cols * sizeof(int));
-    }
+    // Test Example 1
+    int nums1[] = {2, 2, 1};
+    int size1 = sizeof(nums1) / sizeof(nums1[0]);
+    int single1 = singleNumber(nums1, size1);
+    printf("Single number in {2, 2, 1}: %d\n", single1); // Expected output: 1
 
-    // Initialize the grid (representing the network state)
-    int initial_grid[5][7] = {
-        {0, 0, 0, 0, 0, 0, 0},
-        {0, 0, 2, 2, 2, 0, 0},
-        {0, 0, 2, 1, 2, 0, 0},
-        {0, 0, 2, 2, 2, 0, 0},
-        {0, 0, 0, 0, 0, 0, 0}
-    };
+    // Test Example 2
+    int nums2[] = {4, 1, 2, 1, 2};
+    int size2 = sizeof(nums2) / sizeof(nums2[0]);
+    int single2 = singleNumber(nums2, size2);
+    printf("Single number in {4, 1, 2, 1, 2}: %d\n", single2); // Expected output: 4
 
-    for (int i = 0; i < rows; i++) {
-        for (int j = 0; j < cols; j++) {
-            grid[i][j] = initial_grid[i][j];
-        }
-    }
+    // Test Example 3 (Negative numbers)
+    int nums3[] = {-1, 2, -1};
+    int size3 = sizeof(nums3) / sizeof(nums3[0]);
+    int single3 = singleNumber(nums3, size3);
+    printf("Single number in {-1, 2, -1}: %d\n", single3); // Expected output: 2
 
-    Coordinates source = findSourceNode(grid, rows, cols);
-
-    if (source.row != -1) {
-        printf("Source node found at: (%d, %d)\n", source.row, source.col);
-    } else {
-        printf("Source node not found.\n");
-    }
-
-    // Free allocated memory
-    for (int i = 0; i < rows; i++) {
-        free(grid[i]);
-    }
-    free(grid);
+    // Test Example 4 (Single element array)
+    int nums4[] = {5};
+    int size4 = sizeof(nums4) / sizeof(nums4[0]);
+    int single4 = singleNumber(nums4, size4);
+    printf("Single number in {5}: %d\n", single4); // Expected output: 5
 
     return 0;
 }
