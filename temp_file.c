@@ -2,69 +2,110 @@
 #include <stdlib.h>
 #include <stdbool.h>
 
-// Structure for a node in the linked list
-typedef struct Node {
-    char data;
-    struct Node* next;
-} Node;
+/*
+ * This program implements a First Unique Character Finder in a stream of characters.
+ * Example:
+ * Stream: a -> b -> a -> c -> b
+ * After 'a': First unique = 'a'
+ * After 'b': First unique = 'a'
+ * After 'a': First unique = 'b' (because 'a' is now repeated)
+ * After 'c': First unique = 'b'
+ * After 'b': First unique = 'c' (because 'b' is now repeated)
+ */
 
-// Structure for the FirstUnique data structure
-typedef struct {
-    int char_counts[256]; // Assuming ASCII characters
-    Node* head;
-    Node* tail;
-} FirstUnique;
+// Node for our linked list to maintain character order
+typedef struct CharNode {
+    char character;
+    struct CharNode* next;
+} CharNode;
 
-// Function to initialize the FirstUnique data structure
-FirstUnique* createFirstUnique() {
-    FirstUnique* fu = (FirstUnique*)malloc(sizeof(FirstUnique));
-    if (!fu) {
-        return NULL;
+// Main structure to track unique characters
+typedef struct UniqueCharFinder {
+    int frequency[256];         // Count how many times each character appears
+    CharNode* uniqueList;       // Linked list of characters in order of appearance
+    CharNode* lastUnique;       // Points to last node for quick append
+} UniqueCharFinder;
+
+// Create a new character node
+CharNode* createNode(char c) {
+    CharNode* node = (CharNode*)malloc(sizeof(CharNode));
+    if (node == NULL) {
+        printf("Memory allocation failed!\n");
+        exit(1);
     }
-    for (int i = 0; i < 256; i++) {
-        fu->char_counts[i] = 0;
-    }
-    fu->head = NULL;
-    fu->tail = NULL;
-    return fu;
+    node->character = c;
+    node->next = NULL;
+    return node;
 }
 
-// Function to add a character to the stream
-void add(FirstUnique* fu, char character) {
-    fu->char_counts[character]++;
+// Initialize our character finder
+UniqueCharFinder* createFinder() {
+    UniqueCharFinder* finder = (UniqueCharFinder*)malloc(sizeof(UniqueCharFinder));
+    if (finder == NULL) {
+        printf("Memory allocation failed!\n");
+        exit(1);
+    }
+    
+    // Initialize frequency array to 0
+    for (int i = 0; i < 256; i++) {
+        finder->frequency[i] = 0;
+    }
+    
+    finder->uniqueList = NULL;
+    finder->lastUnique = NULL;
+    return finder;
+}
 
-    if (fu->char_counts[character] == 1) {
-        Node* newNode = (Node*)malloc(sizeof(Node));
-        if (!newNode) return;
-        newNode->data = character;
-        newNode->next = NULL;
-
-        if (!fu->tail) {
-            fu->head = newNode;
-            fu->tail = newNode;
+// Add a character to our stream
+void addCharacter(UniqueCharFinder* finder, char c) {
+    printf("\nAdding character: '%c'\n", c);
+    
+    // Increment frequency count
+    finder->frequency[c]++;
+    
+    if (finder->frequency[c] == 1) {
+        // First time seeing this character - add to list
+        CharNode* newNode = createNode(c);
+        
+        if (finder->uniqueList == NULL) {
+            finder->uniqueList = newNode;
+            finder->lastUnique = newNode;
         } else {
-            fu->tail->next = newNode;
-            fu->tail = newNode;
+            finder->lastUnique->next = newNode;
+            finder->lastUnique = newNode;
         }
-    } else if (fu->char_counts[character] == 2) {
-        // Remove the character from the linked list if it's present
-        Node* current = fu->head;
-        Node* prev = NULL;
-        while (current) {
-            if (current->data == character) {
-                if (prev) {
-                    prev->next = current->next;
-                    if (!current->next) {
-                        fu->tail = prev;
-                    }
-                } else {
-                    fu->head = current->next;
-                    if (!fu->head) {
-                        fu->tail = NULL;
-                    }
+        
+        printf("New unique character added\n");
+    }
+    else if (finder->frequency[c] == 2) {
+        // Character is now repeated - remove from unique list
+        printf("Character '%c' is now repeated - removing from unique list\n", c);
+        
+        // Special case: if it's the first node
+        if (finder->uniqueList && finder->uniqueList->character == c) {
+            CharNode* temp = finder->uniqueList;
+            finder->uniqueList = finder->uniqueList->next;
+            free(temp);
+            
+            // Update lastUnique if list is now empty
+            if (finder->uniqueList == NULL) {
+                finder->lastUnique = NULL;
+            }
+            return;
+        }
+        
+        // Search for the character in the list
+        CharNode* current = finder->uniqueList;
+        CharNode* prev = NULL;
+        
+        while (current != NULL) {
+            if (current->character == c) {
+                prev->next = current->next;
+                if (current == finder->lastUnique) {
+                    finder->lastUnique = prev;
                 }
                 free(current);
-                break; // Only remove the first occurrence (should be the only one)
+                break;
             }
             prev = current;
             current = current->next;
@@ -72,45 +113,54 @@ void add(FirstUnique* fu, char character) {
     }
 }
 
-// Function to show the first unique character
-char showFirstUnique(FirstUnique* fu) {
-    if (fu->head) {
-        return fu->head->data;
-    } else {
-        return '#';
+// Get the first unique character in our stream
+char getFirstUnique(UniqueCharFinder* finder) {
+    if (finder->uniqueList == NULL) {
+        return '#';  // Return '#' if no unique character exists
     }
+    return finder->uniqueList->character;
 }
 
-// Function to free the memory used by the FirstUnique data structure
-void freeFirstUnique(FirstUnique* fu) {
-    Node* current = fu->head;
-    while (current) {
-        Node* temp = current;
+// Clean up memory
+void cleanupFinder(UniqueCharFinder* finder) {
+    CharNode* current = finder->uniqueList;
+    while (current != NULL) {
+        CharNode* temp = current;
         current = current->next;
         free(temp);
     }
-    free(fu);
+    free(finder);
 }
 
 int main() {
-    FirstUnique* firstUnique = createFirstUnique();
-
-    add(firstUnique, 'a');
-    printf("First Unique: %c\n", showFirstUnique(firstUnique)); // Output: a
-
-    add(firstUnique, 'b');
-    printf("First Unique: %c\n", showFirstUnique(firstUnique)); // Output: a
-
-    add(firstUnique, 'a');
-    printf("First Unique: %c\n", showFirstUnique(firstUnique)); // Output: b
-
-    add(firstUnique, 'c');
-    printf("First Unique: %c\n", showFirstUnique(firstUnique)); // Output: b
-
-    add(firstUnique, 'b');
-    printf("First Unique: %c\n", showFirstUnique(firstUnique)); // Output: c
-
-    freeFirstUnique(firstUnique);
-
+    // Create our unique character finder
+    UniqueCharFinder* finder = createFinder();
+    
+    // Test cases
+    printf("=== Starting Character Stream Processing ===\n");
+    
+    // Test Case 1: Single character
+    addCharacter(finder, 'a');
+    printf("First unique after 'a': %c\n", getFirstUnique(finder));
+    
+    // Test Case 2: Two different characters
+    addCharacter(finder, 'b');
+    printf("First unique after 'b': %c\n", getFirstUnique(finder));
+    
+    // Test Case 3: Repeated character
+    addCharacter(finder, 'a');
+    printf("First unique after second 'a': %c\n", getFirstUnique(finder));
+    
+    // Test Case 4: Add new character
+    addCharacter(finder, 'c');
+    printf("First unique after 'c': %c\n", getFirstUnique(finder));
+    
+    // Test Case 5: Another repeated character
+    addCharacter(finder, 'b');
+    printf("First unique after second 'b': %c\n", getFirstUnique(finder));
+    
+    // Clean up
+    cleanupFinder(finder);
+    
     return 0;
 }
