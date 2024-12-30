@@ -114,6 +114,23 @@ void connectNodes(NetworkGroups* groups, int node1, int node2) {
     printNetworkState(groups);
 }
 
+// Count number of distinct components in the network
+int countComponents(NetworkGroups* groups) {
+    int* seen = (int*)calloc(groups->size, sizeof(int));
+    int count = 0;
+    
+    for (int i = 0; i < groups->size; i++) {
+        int root = findGroup(groups, i);
+        if (!seen[root]) {
+            seen[root] = 1;
+            count++;
+        }
+    }
+    
+    free(seen);
+    return count;
+}
+
 // Calculate minimum connections needed
 int calculateMinConnections(int total_nodes, int connections[][2], int num_connections, 
                           int lonely_nodes[], int num_lonely) {
@@ -135,16 +152,61 @@ int calculateMinConnections(int total_nodes, int connections[][2], int num_conne
     }
     printf("]\n");
 
+    // Count number of separate components in the network (excluding lonely nodes)
+    int network_components = 0;
+    int* seen = (int*)calloc(groups->size, sizeof(int));
+    
+    // First, mark all lonely nodes as seen
+    for (int i = 0; i < num_lonely; i++) {
+        seen[lonely_nodes[i]] = 1;
+    }
+    
+    // Now count components in the main network
+    for (int i = 0; i < groups->size; i++) {
+        if (!seen[i]) {  // Skip lonely nodes
+            int root = findGroup(groups, i);
+            if (!seen[root]) {
+                seen[root] = 1;
+                network_components++;
+            }
+        }
+    }
+    
+    free(seen);
+
     // Print final state before cleanup
     printf("\n=== Final Network State ===\n");
     printNetworkState(groups);
+    
+    printf("\nAnalysis:\n");
+    printf("- Number of separate network components: %d\n", network_components);
+    printf("- Number of lonely nodes: %d\n", num_lonely);
+    
+    // Calculate minimum connections:
+    // 1. If network_components > 0:
+    //    - We need (network_components - 1) connections to join all network components
+    //    - Plus num_lonely connections to connect each lonely node
+    // 2. If network_components == 0:
+    //    - If num_lonely > 0, we need (num_lonely - 1) connections to connect all lonely nodes
+    //    - If num_lonely == 0, we need 0 connections
+    int min_connections;
+    if (network_components > 0) {
+        min_connections = (network_components - 1) + num_lonely;
+        printf("\nCalculation:\n");
+        printf("- Connections to join network components: %d\n", network_components - 1);
+        printf("- Connections to attach lonely nodes: %d\n", num_lonely);
+    } else {
+        min_connections = num_lonely > 0 ? num_lonely - 1 : 0;
+        printf("\nCalculation:\n");
+        printf("- Connections to join lonely nodes: %d\n", min_connections);
+    }
 
     // Clean up
     free(groups->parent);
     free(groups->rank);
     free(groups);
 
-    return num_lonely;
+    return min_connections;
 }
 
 int main() {
