@@ -69,6 +69,7 @@ int main() {
         {12, 3}
         // ... potentially many more data points
     };
+    
     int streamSize = sizeof(stream) / sizeof(stream[0]);
 
     Point target = {-1, -1}; // Initialize target
