@@ -127,6 +127,7 @@ int main() {
     int target_x2 = 10;
     int target_y2 = 20;
     int target_time2 = 1;
+    
     if (findTargetSpeck(ht, target_x2, target_y2, target_time2)) {
         printf("Target speck found at (%d, %d) at time %d!\n", target_x2, target_y2, target_time2);
     } else {
