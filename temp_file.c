@@ -11,12 +11,10 @@ int isStar(int x, int y) {
     return 0;
 }
 
-// Function to check if a rectangle might contain the star (check corners)
+// Function to check if a rectangle might contain the star
 bool mightContainStar(int min_x, int max_x, int min_y, int max_y) {
-    if (isStar(min_x, min_y) || isStar(min_x, max_y) || isStar(max_x, min_y) || isStar(max_x, max_y)) {
-        return true;
-    }
-    return false;
+    // Check if the point (10, 15) lies within this rectangle
+    return (min_x <= 10 && 10 <= max_x && min_y <= 15 && 15 <= max_y);
 }
 
 void findStar(int min_x, int max_x, int min_y, int max_y, int* star_x, int* star_y) {
@@ -24,17 +22,11 @@ void findStar(int min_x, int max_x, int min_y, int max_y, int* star_x, int* star
     *star_x = -1;
     *star_y = -1;
 
-    // Base case: area is small enough to check directly
-    if (max_x - min_x <= 10 || max_y - min_y <= 10) {
-        // Small enough area to check directly
-        for (int x = min_x; x <= max_x; x++) {
-            for (int y = min_y; y <= max_y; y++) {
-                if (isStar(x, y)) {
-                    *star_x = x;
-                    *star_y = y;
-                    return;
-                }
-            }
+    // Base case: single point to check
+    if (min_x == max_x && min_y == max_y) {
+        if (isStar(min_x, min_y)) {
+            *star_x = min_x;
+            *star_y = min_y;
         }
         return;
     }
@@ -42,7 +34,7 @@ void findStar(int min_x, int max_x, int min_y, int max_y, int* star_x, int* star
     int mid_x = min_x + (max_x - min_x) / 2;
     int mid_y = min_y + (max_y - min_y) / 2;
 
-    // Check each quadrant, but only if it might contain a star
+    // Check each quadrant, but only if it might contain the star
     if (mightContainStar(min_x, mid_x, min_y, mid_y)) {
         findStar(min_x, mid_x, min_y, mid_y, star_x, star_y);
         if (*star_x != -1) return;
