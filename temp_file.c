@@ -1,89 +1,140 @@
 #include <stdio.h>
-#include <stdbool.h>
 #include <stdlib.h>
+#include <stdbool.h>
 
-// Assume this is the external function provided
-bool is_white(int x, int y) {
-    // In a real scenario, this would interact with the image data.
-    // For testing, let's assume the white pixel is at (5, 5).
-    return x == 5 && y == 5;
+// Structure to represent a speck
+typedef struct Speck {
+    int x;
+    int y;
+    int time;
+    struct Speck* next; // For collision handling (separate chaining)
+} Speck;
+
+// Hash table structure
+typedef struct HashTable {
+    int size;
+    Speck** table;
+} HashTable;
+
+// Simple hash function
+unsigned int hash(int x, int y, int time, int table_size) {
+    // A basic combination method, can be improved
+    unsigned int combined = (unsigned int)x * 31 + (unsigned int)y * 37 + (unsigned int)time;
+    return combined % table_size;
 }
 
-typedef struct {
-    int min_x, max_x, min_y, max_y;
-} BoundingBox;
-
-typedef struct {
-    int x, y;
-} Point;
-
-Point find_white_pixel_recursive(BoundingBox box) {
-    if (box.min_x == box.max_x && box.min_y == box.max_y) {
-        return (Point){box.min_x, box.min_y};
+// Function to create a new speck
+Speck* createSpeck(int x, int y, int time) {
+    Speck* newSpeck = (Speck*)malloc(sizeof(Speck));
+    if (!newSpeck) {
+        perror("Memory allocation failed");
+        exit(EXIT_FAILURE);
     }
-
-    int mid_x = box.min_x + (box.max_x - box.min_x) / 2;
-    int mid_y = box.min_y + (box.max_y - box.min_y) / 2;
-
-    BoundingBox quadrants[4];
-    quadrants[0] = (BoundingBox){box.min_x, mid_x, box.min_y, mid_y}; // Top-left
-    quadrants[1] = (BoundingBox){mid_x + 1, box.max_x, box.min_y, mid_y}; // Top-right
-    quadrants[2] = (BoundingBox){box.min_x, mid_x, mid_y + 1, box.max_y}; // Bottom-left
-    quadrants[3] = (BoundingBox){mid_x + 1, box.max_x, mid_y + 1, box.max_y}; // Bottom-right
-
-    for (int i = 0; i < 4; ++i) {
-        // Optimization: Check corners of the quadrant before recursive call
-        if (is_white(quadrants[i].min_x, quadrants[i].min_y) ||
-            is_white(quadrants[i].max_x, quadrants[i].min_y) ||
-            is_white(quadrants[i].min_x, quadrants[i].max_y) ||
-            is_white(quadrants[i].max_x, quadrants[i].max_y) ||
-            (quadrants[i].max_x - quadrants[i].min_x <= 1 && quadrants[i].max_y - quadrants[i].min_y <= 1 &&
-             (is_white(quadrants[i].min_x, quadrants[i].min_y) ||
-              (quadrants[i].max_x > quadrants[i].min_x && is_white(quadrants[i].max_x, quadrants[i].min_y)) ||
-              (quadrants[i].max_y > quadrants[i].min_y && is_white(quadrants[i].min_x, quadrants[i].max_y)) ||
-              (quadrants[i].max_x > quadrants[i].min_x && quadrants[i].max_y > quadrants[i].min_y && is_white(quadrants[i].max_x, quadrants[i].max_y)))))
-         {
-            return find_white_pixel_recursive(quadrants[i]);
-        }
-    }
-
-    // Should not happen if there's exactly one white pixel
-    return (Point){-1, -1};
+    newSpeck->x = x;
+    newSpeck->y = y;
+    newSpeck->time = time;
+    newSpeck->next = NULL;
+    return newSpeck;
 }
 
-Point find_white_pixel() {
-    // Initial bounding box expansion
-    BoundingBox initial_box = {-1, 1, -1, 1};
-    while (true) {
-        bool found = false;
-        for (int x = initial_box.min_x; x <= initial_box.max_x; ++x) {
-            for (int y = initial_box.min_y; y <= initial_box.max_y; ++y) {
-                if (is_white(x, y)) {
-                    found = true;
-                    break;
-                }
-            }
-            if (found) break;
+// Function to create a hash table
+HashTable* createHashTable(int size) {
+    HashTable* ht = (HashTable*)malloc(sizeof(HashTable));
+    if (!ht) {
+        perror("Memory allocation failed");
+        exit(EXIT_FAILURE);
+    }
+    ht->size = size;
+    ht->table = (Speck**)calloc(size, sizeof(Speck*));
+    if (!ht->table) {
+        perror("Memory allocation failed");
+        exit(EXIT_FAILURE);
+    }
+    return ht;
+}
+
+// Function to insert a speck into the hash table
+void insertSpeck(HashTable* ht, int x, int y, int time) {
+    unsigned int index = hash(x, y, time, ht->size);
+    Speck* newSpeck = createSpeck(x, y, time);
+    newSpeck->next = ht->table[index];
+    ht->table[index] = newSpeck;
+}
+
+// Function to search for the target speck
+bool findTargetSpeck(HashTable* ht, int target_x, int target_y, int target_time) {
+    unsigned int index = hash(target_x, target_y, target_time, ht->size);
+    Speck* current = ht->table[index];
+    while (current) {
+        if (current->x == target_x && current->y == target_y && current->time == target_time) {
+            return true;
         }
-        if (found) {
-            return find_white_pixel_recursive(initial_box);
-        } else {
-            initial_box.min_x *= 2;
-            initial_box.max_x *= 2;
-            initial_box.min_y *= 2;
-            initial_box.max_y *= 2;
-            if (initial_box.min_x > initial_box.max_x || initial_box.min_y > initial_box.max_y) {
-                 initial_box.min_x = -abs(initial_box.max_x) -1;
-                 initial_box.min_y = -abs(initial_box.max_y) -1;
-                 initial_box.max_x = abs(initial_box.max_x) + 1;
-                 initial_box.max_y = abs(initial_box.max_y) + 1;
-            }
+        current = current->next;
+    }
+    return false;
+}
+
+// Function to free the hash table
+void freeHashTable(HashTable* ht) {
+    if (!ht) return;
+    for (int i = 0; i < ht->size; i++) {
+        Speck* current = ht->table[i];
+        while (current) {
+            Speck* temp = current;
+            current = current->next;
+            free(temp);
         }
     }
+    free(ht->table);
+    free(ht);
 }
 
 int main() {
-    Point white_pixel = find_white_pixel();
-    printf("White pixel found at (%d, %d)\n", white_pixel.x, white_pixel.y);
+    // Example usage
+
+    // Simulate speck appearances
+    int appearances[][3] = {
+        {10, 20, 1},
+        {15, 25, 2},
+        {10, 20, 3}, // Note the same coordinates but different time
+        {30, 40, 2},
+        {5, 10, 4}
+    };
+    int num_appearances = sizeof(appearances) / sizeof(appearances[0]);
+
+    // Target speck information
+    int target_x = 10;
+    int target_y = 20;
+    int target_time = 3;
+
+    // Create a hash table (choose a reasonable size)
+    int hash_table_size = 10;
+    HashTable* ht = createHashTable(hash_table_size);
+
+    // Insert the appeared specks into the hash table
+    for (int i = 0; i < num_appearances; i++) {
+        insertSpeck(ht, appearances[i][0], appearances[i][1], appearances[i][2]);
+    }
+
+    // Search for the target speck
+    if (findTargetSpeck(ht, target_x, target_y, target_time)) {
+        printf("Target speck found at (%d, %d) at time %d!\n", target_x, target_y, target_time);
+    } else {
+        printf("Target speck not found at (%d, %d) at time %d.\n", target_x, target_y, target_time);
+    }
+
+    // Example where the target is not found (different time)
+    int target_x2 = 10;
+    int target_y2 = 20;
+    int target_time2 = 1;
+    if (findTargetSpeck(ht, target_x2, target_y2, target_time2)) {
+        printf("Target speck found at (%d, %d) at time %d!\n", target_x2, target_y2, target_time2);
+    } else {
+        printf("Target speck not found at (%d, %d) at time %d.\n", target_x2, target_y2, target_time2);
+    }
+
+    // Clean up
+    freeHashTable(ht);
+
     return 0;
 }
