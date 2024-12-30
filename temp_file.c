@@ -82,14 +82,13 @@ int main() {
         insertPacket(&buffer_head, received_packet);
         printBuffer(buffer_head);
 
-        // Update next_expected_packet_id
+        // Update next_expected_packet_id by finding the longest sequence of consecutive packets from 0
         Packet* current = buffer_head;
-        int consecutive_count = 0;
-        while (current != NULL && current->id == next_expected_packet_id + consecutive_count) {
-            consecutive_count++;
+        next_expected_packet_id = 0;  // Reset to start checking from 0
+        while (current != NULL && current->id == next_expected_packet_id) {
+            next_expected_packet_id++;
             current = current->next;
         }
-        next_expected_packet_id += consecutive_count;
 
         printf("Next Expected Packet ID: %d\n", next_expected_packet_id);
 
