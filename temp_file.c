@@ -2,96 +2,115 @@
 #include <stdlib.h>
 #include <stdbool.h>
 
-// Define a simple hash table structure (for demonstration purposes)
-#define TABLE_SIZE 1024
+// Structure for a node in the linked list
+typedef struct Node {
+    char data;
+    struct Node* next;
+} Node;
 
-typedef struct HashNode {
-    int key;
-    int count;
-    struct HashNode *next;
-} HashNode;
+// Structure for the FirstUnique data structure
+typedef struct {
+    int char_counts[256]; // Assuming ASCII characters
+    Node* head;
+    Node* tail;
+} FirstUnique;
 
-HashNode *hash_table[TABLE_SIZE];
-
-// Simple hash function
-unsigned int hash(int key) {
-    return (unsigned int)key % TABLE_SIZE;
+// Function to initialize the FirstUnique data structure
+FirstUnique* createFirstUnique() {
+    FirstUnique* fu = (FirstUnique*)malloc(sizeof(FirstUnique));
+    if (!fu) {
+        return NULL;
+    }
+    for (int i = 0; i < 256; i++) {
+        fu->char_counts[i] = 0;
+    }
+    fu->head = NULL;
+    fu->tail = NULL;
+    return fu;
 }
 
-// Insert or update an element in the hash table
-void hash_insert(int key) {
-    unsigned int index = hash(key);
-    HashNode *current = hash_table[index];
+// Function to add a character to the stream
+void add(FirstUnique* fu, char character) {
+    fu->char_counts[character]++;
 
-    while (current != NULL) {
-        if (current->key == key) {
-            current->count++;
-            return;
+    if (fu->char_counts[character] == 1) {
+        Node* newNode = (Node*)malloc(sizeof(Node));
+        if (!newNode) return;
+        newNode->data = character;
+        newNode->next = NULL;
+
+        if (!fu->tail) {
+            fu->head = newNode;
+            fu->tail = newNode;
+        } else {
+            fu->tail->next = newNode;
+            fu->tail = newNode;
         }
-        current = current->next;
-    }
-
-    // Key not found, create a new node
-    HashNode *new_node = (HashNode *)malloc(sizeof(HashNode));
-    if (new_node == NULL) {
-        perror("Memory allocation failed");
-        exit(EXIT_FAILURE);
-    }
-    new_node->key = key;
-    new_node->count = 1;
-    new_node->next = hash_table[index];
-    hash_table[index] = new_node;
-}
-
-// Find the unique element
-int find_lone_signal(int arr[], int size) {
-    // Initialize the hash table
-    for (int i = 0; i < TABLE_SIZE; i++) {
-        hash_table[i] = NULL;
-    }
-
-    // Populate the hash table with signal counts
-    for (int i = 0; i < size; i++) {
-        hash_insert(arr[i]);
-    }
-
-    // Find the signal with a count of 1
-    for (int i = 0; i < TABLE_SIZE; i++) {
-        HashNode *current = hash_table[i];
-        while (current != NULL) {
-            if (current->count == 1) {
-                return current->key;
+    } else if (fu->char_counts[character] == 2) {
+        // Remove the character from the linked list if it's present
+        Node* current = fu->head;
+        Node* prev = NULL;
+        while (current) {
+            if (current->data == character) {
+                if (prev) {
+                    prev->next = current->next;
+                    if (!current->next) {
+                        fu->tail = prev;
+                    }
+                } else {
+                    fu->head = current->next;
+                    if (!fu->head) {
+                        fu->tail = NULL;
+                    }
+                }
+                free(current);
+                break; // Only remove the first occurrence (should be the only one)
             }
+            prev = current;
             current = current->next;
         }
     }
+}
 
-    // Should not happen if the problem constraints are met
-    return -1;
+// Function to show the first unique character
+char showFirstUnique(FirstUnique* fu) {
+    if (fu->head) {
+        return fu->head->data;
+    } else {
+        return '#';
+    }
+}
+
+// Function to free the memory used by the FirstUnique data structure
+void freeFirstUnique(FirstUnique* fu) {
+    Node* current = fu->head;
+    while (current) {
+        Node* temp = current;
+        current = current->next;
+        free(temp);
+    }
+    free(fu);
 }
 
 int main() {
-    // Test example input (representing a stream of signals)
-    int signals[] = {1, 2, 3, 4, 5, 2, 1, 4, 3, 6, 5, 1, 2, 4, 3, 5, 6, 7, 6, 5, 4, 3, 2, 1};
-    int size = sizeof(signals) / sizeof(signals[0]);
+    FirstUnique* firstUnique = createFirstUnique();
 
-    int lone_signal = find_lone_signal(signals, size);
+    add(firstUnique, 'a');
+    printf("First Unique: %c\n", showFirstUnique(firstUnique)); // Output: a
 
-    if (lone_signal != -1) {
-        printf("The lone signal is: %d\n", lone_signal);
-    } else {
-        printf("No lone signal found.\n");
-    }
+    add(firstUnique, 'b');
+    printf("First Unique: %c\n", showFirstUnique(firstUnique)); // Output: a
 
-    // Clean up hash table memory (important in real applications)
-    for (int i = 0; i < TABLE_SIZE; i++) {
-        HashNode *current = hash_table[i];
-        while (current != NULL) {
-            HashNode *temp = current;
-            current = current->next;
-            free(temp);
-        }
-    }
+    add(firstUnique, 'a');
+    printf("First Unique: %c\n", showFirstUnique(firstUnique)); // Output: b
+
+    add(firstUnique, 'c');
+    printf("First Unique: %c\n", showFirstUnique(firstUnique)); // Output: b
+
+    add(firstUnique, 'b');
+    printf("First Unique: %c\n", showFirstUnique(firstUnique)); // Output: c
+
+    freeFirstUnique(firstUnique);
 
     return 0;
 }
