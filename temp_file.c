@@ -1,127 +1,77 @@
 #include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <limits.h>
+#include <stdbool.h>
 
-#define ALPHABET_SIZE 26
-
-// Trie Node Structure
-typedef struct TrieNode {
-    struct TrieNode* children[ALPHABET_SIZE];
-    int isEndOfWord;
-} TrieNode;
-
-// Function to create a new Trie node
-TrieNode* createNode() {
-    TrieNode* newNode = (TrieNode*)malloc(sizeof(TrieNode));
-    for (int i = 0; i < ALPHABET_SIZE; i++) {
-        newNode->children[i] = NULL;
+// Assume getPixel is a provided function
+int getPixel(int x, int y) {
+    // In a real implementation, this would interact with the data source.
+    // For testing, we can simulate the white pixel's location.
+    static int white_x = 5;
+    static int white_y = -3;
+    if (x == white_x && y == white_y) {
+        return 1;
     }
-    newNode->isEndOfWord = 0;
-    return newNode;
+    return 0;
 }
 
-// Function to insert a word into the Trie
-void insert(TrieNode* root, const char* word) {
-    TrieNode* curr = root;
-    for (int i = 0; word[i] != '\0'; i++) {
-        int index = word[i] - 'a';
-        if (!curr->children[index]) {
-            curr->children[index] = createNode();
-        }
-        curr = curr->children[index];
-    }
-    curr->isEndOfWord = 1;
-}
-
-// Function to calculate the minimum of three integers
-int min(int a, int b, int c) {
-    return (a < b) ? (a < c ? a : c) : (b < c ? b : c);
-}
-
-// Function to calculate Levenshtein distance
-int editDistance(const char* s1, const char* s2, int m, int n) {
-    int dp[m + 1][n + 1];
-
-    for (int i = 0; i <= m; i++) {
-        for (int j = 0; j <= n; j++) {
-            if (i == 0)
-                dp[i][j] = j;
-            else if (j == 0)
-                dp[i][j] = i;
-            else if (s1[i - 1] == s2[j - 1])
-                dp[i][j] = dp[i - 1][j - 1];
-            else
-                dp[i][j] = 1 + min(dp[i - 1][j],        // Deletion
-                                   dp[i][j - 1],        // Insertion
-                                   dp[i - 1][j - 1]);    // Substitution
-        }
-    }
-    return dp[m][n];
-}
-
-// Structure to hold the best match found so far
 typedef struct {
-    char* word;
-    int distance;
-} BestMatch;
+    int x;
+    int y;
+} Point;
 
-// Global variable to store the best match
-BestMatch bestMatch;
+Point findWhitePixel() {
+    int step = 1;
+    int x = 0, y = 0;
 
-// Recursive function to search the Trie with edit distance
-void searchTrieWithEditDistance(TrieNode* node, const char* target, char* currentWord, int depth) {
-    if (node->isEndOfWord) {
-        int dist = editDistance(currentWord, target, strlen(currentWord), strlen(target));
-        if (dist < bestMatch.distance) {
-            free(bestMatch.word);
-            bestMatch.word = strdup(currentWord);
-            bestMatch.distance = dist;
+    // Phase 1: Expand outwards to find a bounding box
+    while (true) {
+        if (getPixel(x + step, y)) {
+            return (Point){x + step, y};
+        }
+        if (getPixel(x - step, y)) {
+            return (Point){x - step, y};
+        }
+        if (getPixel(x, y + step)) {
+            return (Point){x, y + step};
+        }
+        if (getPixel(x, y - step)) {
+            return (Point){x, y - step};
+        }
+        if (getPixel(x + step, y + step)) {
+            return (Point){x + step, y + step};
+        }
+        if (getPixel(x - step, y + step)) {
+            return (Point){x - step, y + step};
+        }
+        if (getPixel(x + step, y - step)) {
+            return (Point){x + step, y - step};
+        }
+        if (getPixel(x - step, y - step)) {
+            return (Point){x - step, y - step};
+        }
+        step *= 2; // Exponentially increase the search radius
+        if (step > 1000) break; // Optional: Add a safety break to prevent infinite loops in simulation
+    }
+
+    // Phase 2: More refined search (can be implemented with binary search principles)
+    // This is a simplified approach for demonstration. A more robust solution
+    // would involve tracking search boundaries and using binary search.
+    for (int current_step_x = -step; current_step_x <= step; ++current_step_x) {
+        for (int current_step_y = -step; current_step_y <= step; ++current_step_y) {
+            if (getPixel(current_step_x, current_step_y)) {
+                return (Point){current_step_x, current_step_y};
+            }
         }
     }
 
-    for (int i = 0; i < ALPHABET_SIZE; i++) {
-        if (node->children[i]) {
-            currentWord[depth] = 'a' + i;
-            currentWord[depth + 1] = '\0';
-            searchTrieWithEditDistance(node->children[i], target, currentWord, depth + 1);
-        }
-    }
-}
-
-// Function to find the closest match in the Trie
-char* findClosestMatch(TrieNode* root, const char* target) {
-    bestMatch.distance = INT_MAX;
-    bestMatch.word = NULL;
-    char currentWord[100]; // Assuming max word length is 99
-
-    searchTrieWithEditDistance(root, target, currentWord, 0);
-    return bestMatch.word;
+    return (Point){-1, -1}; // Should not reach here if a white pixel exists
 }
 
 int main() {
-    // Sample book titles
-    char* bookTitles[] = {"algorithms", "data structures", "artificial intelligence", "machine learning", "deep learning", "computer science"};
-    int numTitles = sizeof(bookTitles) / sizeof(bookTitles[0]);
-
-    // Build the Trie
-    TrieNode* root = createNode();
-    for (int i = 0; i < numTitles; i++) {
-        insert(root, bookTitles[i]);
-    }
-
-    // Target title (representing the white object)
-    char* targetTitle = "datr structure";
-
-    // Find the closest match
-    char* closestMatch = findClosestMatch(root, targetTitle);
-
-    if (closestMatch) {
-        printf("Closest match for '%s': '%s'\n", targetTitle, closestMatch);
-        free(closestMatch);
+    Point white_loc = findWhitePixel();
+    if (white_loc.x != -1) {
+        printf("White pixel found at coordinates: (%d, %d)\n", white_loc.x, white_loc.y);
     } else {
-        printf("No matches found for '%s'\n", targetTitle);
+        printf("White pixel not found.\n");
     }
-
     return 0;
 }
