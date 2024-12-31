@@ -148,9 +148,14 @@ int main() {
 
     char* chunk;
     printf("Getting audio chunks:\n");
-    while (expectedSequenceNumber <= 6) { // Process up to a certain sequence number for the example
+    // Process all received packets plus handle missing ones
+    while (expectedSequenceNumber <= 5) {
         chunk = getNextAudioChunk();
-        if (chunk != NULL) {
+        if (chunk == WAITING_SIGNAL) {
+            printf("Waiting for next packet\n");
+        } else if (chunk == SILENCE_DATA) {
+            printf("Missing packet - inserting silence\n");
+        } else {
             printf("Next audio chunk: %s\n", chunk);
         }
     }
