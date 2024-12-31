@@ -1,143 +1,92 @@
 #include <stdio.h>
-#include <stdlib.h>
+#include <string.h>
 #include <stdbool.h>
+#include <stdlib.h>
 
-// Define a structure for the hash table entry
-typedef struct RelationshipNode {
-    int person1Id;
-    int person2Id;
-    int status;
-    struct RelationshipNode* next;
-} RelationshipNode;
-
-// Define the hash table structure
+// A simple hash table implementation using an array of linked lists
 #define HASH_TABLE_SIZE 101 // A prime number for better distribution
-RelationshipNode* hashTable[HASH_TABLE_SIZE];
 
-// Hash function (simple modulo operation)
-unsigned int hash(int person1Id, int person2Id) {
-    // Ensure consistent ordering for the key
-    int minId = (person1Id < person2Id) ? person1Id : person2Id;
-    int maxId = (person1Id > person2Id) ? person1Id : person2Id;
-    unsigned int key = (unsigned int)minId * HASH_TABLE_SIZE + maxId; // Combine IDs
-    return key % HASH_TABLE_SIZE;
+typedef struct HashNode {
+    char *password;
+    struct HashNode *next;
+} HashNode;
+
+HashNode *hash_table[HASH_TABLE_SIZE];
+
+// Simple hash function
+unsigned int hash(const char *str) {
+    unsigned int hash = 5381;
+    int c;
+    while ((c = *str++))
+        hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
+    return hash % HASH_TABLE_SIZE;
 }
 
-// Function to establish or update a relationship
-void establishRelationship(int person1Id, int person2Id, int initialStatus) {
-    unsigned int index = hash(person1Id, person2Id);
-    RelationshipNode* current = hashTable[index];
-    RelationshipNode* prev = NULL;
-
-    while (current != NULL) {
-        if ((current->person1Id == person1Id && current->person2Id == person2Id) ||
-            (current->person1Id == person2Id && current->person2Id == person1Id)) {
-            current->status = initialStatus;
-            return;
-        }
-        prev = current;
-        current = current->next;
-    }
-
-    RelationshipNode* newNode = (RelationshipNode*)malloc(sizeof(RelationshipNode));
-    if (!newNode) {
+// Insert a password into the hash table
+void insert_password(const char *password) {
+    unsigned int index = hash(password);
+    HashNode *new_node = (HashNode *)malloc(sizeof(HashNode));
+    if (!new_node) {
         perror("Memory allocation failed");
         exit(EXIT_FAILURE);
     }
-    newNode->person1Id = person1Id;
-    newNode->person2Id = person2Id;
-    newNode->status = initialStatus;
-    newNode->next = NULL;
-
-    if (prev) {
-        prev->next = newNode;
-    } else {
-        hashTable[index] = newNode;
-    }
+    new_node->password = strdup(password); // Allocate memory for the password
+    new_node->next = hash_table[index];
+    hash_table[index] = new_node;
 }
 
-// Function to get the relationship status
-int getRelationshipStatus(int person1Id, int person2Id) {
-    unsigned int index = hash(person1Id, person2Id);
-    RelationshipNode* current = hashTable[index];
-
-    while (current != NULL) {
-        if ((current->person1Id == person1Id && current->person2Id == person2Id) ||
-            (current->person1Id == person2Id && current->person2Id == person1Id)) {
-            return current->status;
+// Check if a password exists in the hash table
+bool is_weak_password(const char *potential_password) {
+    unsigned int index = hash(potential_password);
+    HashNode *current = hash_table[index];
+    while (current) {
+        if (strcmp(current->password, potential_password) == 0) {
+            return true;
         }
         current = current->next;
     }
-    return -999; // Relationship not found
+    return false;
 }
 
-// Function to update the relationship status
-void updateRelationshipStatus(int person1Id, int person2Id, int newStatus) {
-    unsigned int index = hash(person1Id, person2Id);
-    RelationshipNode* current = hashTable[index];
-
-    while (current != NULL) {
-        if ((current->person1Id == person1Id && current->person2Id == person2Id) ||
-            (current->person1Id == person2Id && current->person2Id == person1Id)) {
-            current->status = newStatus;
-            return;
-        }
-        current = current->next;
-    }
-    printf("Relationship between %d and %d not found for update.\n", person1Id, person2Id);
-}
-
-// Function to get all relationships for a person
-void getAllRelationshipsForPerson(int personId) {
-    printf("Relationships for person %d:\n", personId);
+// Function to free the hash table memory
+void free_hash_table() {
     for (int i = 0; i < HASH_TABLE_SIZE; i++) {
-        RelationshipNode* current = hashTable[i];
-        while (current != NULL) {
-            if (current->person1Id == personId || current->person2Id == personId) {
-                int otherPersonId = (current->person1Id == personId) ? current->person2Id : current->person1Id;
-                printf("  With person %d: Status = %d\n", otherPersonId, current->status);
-            }
+        HashNode *current = hash_table[i];
+        while (current) {
+            HashNode *temp = current;
+            free(temp->password);
             current = current->next;
+            free(temp);
         }
-    }
-}
-
-// Function to initialize the hash table
-void initializeHashTable() {
-    for (int i = 0; i < HASH_TABLE_SIZE; i++) {
-        hashTable[i] = NULL;
+        hash_table[i] = NULL;
     }
 }
 
 int main() {
-    initializeHashTable();
+    // Initialize the hash table
+    for (int i = 0; i < HASH_TABLE_SIZE; i++) {
+        hash_table[i] = NULL;
+    }
 
-    // Test Example Input (based on the image's implied scenario)
-    int personA = 1; // Representing the woman
-    int personB = 2; // Representing the man
+    // Example list of weak passwords
+    char *weak_passwords[] = {"password", "123456", "qwerty", "admin", "111111"};
+    int num_weak_passwords = sizeof(weak_passwords) / sizeof(weak_passwords[0]);
 
-    // Initial state: Perhaps some level of connection exists
-    establishRelationship(personA, personB, 2); // Assume they are friends initially
-    printf("Initial status between %d and %d: %d\n", personA, personB, getRelationshipStatus(personA, personB));
+    // Populate the hash table with weak passwords
+    for (int i = 0; i < num_weak_passwords; i++) {
+        insert_password(weak_passwords[i]);
+    }
 
-    // The interaction in the image suggests a moment of support
-    updateRelationshipStatus(personA, personB, 3); // Status updated to 'Close Friends' or similar
-    printf("Status after interaction: %d\n", getRelationshipStatus(personA, personB));
+    // Test cases
+    char *test_passwords[] = {"mysecurepassword", "password", "qwertyuiop", "123456"};
+    int num_test_passwords = sizeof(test_passwords) / sizeof(test_passwords[0]);
 
-    // Introduce other individuals
-    int personC = 3;
-    establishRelationship(personA, personC, 1); // Acquaintances
-    establishRelationship(personB, personC, -1); // Conflict
+    for (int i = 0; i < num_test_passwords; i++) {
+        printf("Checking if '%s' is a weak password: %s\n", test_passwords[i], is_weak_password(test_passwords[i]) ? "true" : "false");
+    }
 
-    getAllRelationshipsForPerson(personA);
-    getAllRelationshipsForPerson(personB);
-    getAllRelationshipsForPerson(personC);
-
-    printf("Status between %d and %d: %d\n", personA, personC, getRelationshipStatus(personA, personC));
-    printf("Status between %d and %d: %d\n", personB, personC, getRelationshipStatus(personB, personC));
-
-    // Trying to get status of a non-existent relationship
-    printf("Status between %d and %d: %d\n", 4, 5, getRelationshipStatus(4, 5));
+    // Free the allocated memory
+    free_hash_table();
 
     return 0;
 }
