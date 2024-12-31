@@ -2,129 +2,147 @@
 #include <stdlib.h>
 #include <string.h>
 
-// Structure for a hash table node
-typedef struct HashTableNode {
-    char* key;
-    int count;
-    struct HashTableNode* next;
-} HashTableNode;
+#define HASH_TABLE_SIZE 101 // A prime number for better distribution
 
-// Simple hash function (can be improved for better distribution)
-unsigned int hash(const char* str, int capacity) {
-    unsigned int hashValue = 0;
-    for (int i = 0; str[i] != '\0'; i++) {
-        hashValue = 31 * hashValue + str[i];
-    }
-    return hashValue % capacity;
+// Linked List Node for Locations
+typedef struct LocationNode {
+    char* location;
+    struct LocationNode* next;
+} LocationNode;
+
+// Hash Table Entry
+typedef struct HashTableEntry {
+    char* item;
+    LocationNode* locations;
+} HashTableEntry;
+
+HashTableEntry* hashTable[HASH_TABLE_SIZE];
+
+// Hash Function (simple polynomial rolling hash)
+unsigned long hash(const char* str) {
+    unsigned long hash = 5381;
+    int c;
+    while ((c = *str++))
+        hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
+    return hash % HASH_TABLE_SIZE;
 }
 
-// Function to insert/update an item in the hash table
-void insertOrUpdate(HashTableNode** hashTable, const char* key, int capacity) {
-    unsigned int index = hash(key, capacity);
-    HashTableNode* current = hashTable[index];
-
-    while (current != NULL) {
-        if (strcmp(current->key, key) == 0) {
-            current->count++;
-            return;
-        }
-        current = current->next;
+// Create a new location node
+LocationNode* createLocationNode(const char* location) {
+    LocationNode* newNode = (LocationNode*)malloc(sizeof(LocationNode));
+    if (!newNode) {
+        perror("Memory allocation failed");
+        exit(EXIT_FAILURE);
     }
-
-    HashTableNode* newNode = (HashTableNode*)malloc(sizeof(HashTableNode));
-    newNode->key = strdup(key);
-    newNode->count = 1;
-    newNode->next = hashTable[index];
-    hashTable[index] = newNode;
+    newNode->location = strdup(location);
+    newNode->next = NULL;
+    return newNode;
 }
 
-// Function to find the count of an item in the hash table
-int findCount(HashTableNode** hashTable, const char* key, int capacity) {
-    unsigned int index = hash(key, capacity);
-    HashTableNode* current = hashTable[index];
-    while (current != NULL) {
-        if (strcmp(current->key, key) == 0) {
-            return current->count;
+// Insert a location for an item
+void insert(const char* item, const char* location) {
+    unsigned long index = hash(item);
+
+    // Check if the item already exists
+    if (hashTable[index] != NULL && strcmp(hashTable[index]->item, item) == 0) {
+        // Add location to the beginning of the linked list
+        LocationNode* newNode = createLocationNode(location);
+        newNode->next = hashTable[index]->locations;
+        hashTable[index]->locations = newNode;
+    } else {
+        // Create a new entry
+        HashTableEntry* newEntry = (HashTableEntry*)malloc(sizeof(HashTableEntry));
+        if (!newEntry) {
+            perror("Memory allocation failed");
+            exit(EXIT_FAILURE);
         }
-        current = current->next;
+        newEntry->item = strdup(item);
+        newEntry->locations = createLocationNode(location);
+        hashTable[index] = newEntry;
     }
-    return 0;
 }
 
-// Function to find the missing items
-char** findMissingItems(char** expected_items, int expected_count, char** packed_items, int packed_count, int* missing_count) {
-    int capacity = expected_count * 2; // A reasonable capacity for the hash tables
-    HashTableNode** expected_counts = (HashTableNode**)calloc(capacity, sizeof(HashTableNode*));
-    HashTableNode** packed_counts = (HashTableNode**)calloc(capacity, sizeof(HashTableNode*));
-
-    // Count expected items
-    for (int i = 0; i < expected_count; i++) {
-        insertOrUpdate(expected_counts, expected_items[i], capacity);
+// Search for an item and return its locations
+LocationNode* search(const char* item) {
+    unsigned long index = hash(item);
+    if (hashTable[index] != NULL && strcmp(hashTable[index]->item, item) == 0) {
+        return hashTable[index]->locations;
     }
-
-    // Count packed items
-    for (int i = 0; i < packed_count; i++) {
-        if (findCount(expected_counts, packed_items[i], capacity) > 0) {
-            insertOrUpdate(packed_counts, packed_items[i], capacity);
-        }
-    }
-
-    // Identify missing items
-    char** missing_items_list = (char**)malloc(expected_count * sizeof(char*)); // Max possible missing items
-    *missing_count = 0;
-    for (int i = 0; i < capacity; i++) {
-        HashTableNode* current = expected_counts[i];
-        while (current != NULL) {
-            int expected = current->count;
-            int packed = findCount(packed_counts, current->key, capacity);
-            int difference = expected - packed;
-            for (int j = 0; j < difference; j++) {
-                missing_items_list[*missing_count] = strdup(current->key);
-                (*missing_count)++;
-            }
-            current = current->next;
-        }
-    }
-
-    // Clean up hash tables (free memory - important!)
-    for (int i = 0; i < capacity; i++) {
-        HashTableNode* current = expected_counts[i];
-        while (current != NULL) {
-            HashTableNode* temp = current;
-            free(temp->key);
-            current = current->next;
-            free(temp);
-        }
-        current = packed_counts[i];
-        while (current != NULL) {
-            HashTableNode* temp = current;
-            free(temp->key);
-            current = current->next;
-            free(temp);
-        }
-    }
-    free(expected_counts);
-    free(packed_counts);
-
-    return missing_items_list;
+    return NULL;
 }
 
-// Test Example
+// Function to free the linked list of locations
+void freeLocations(LocationNode* head) {
+    while (head) {
+        LocationNode* temp = head;
+        head = head->next;
+        free(temp->location);
+        free(temp);
+    }
+}
+
+// Function to free the hash table
+void freeHashTable() {
+    for (int i = 0; i < HASH_TABLE_SIZE; i++) {
+        if (hashTable[i]) {
+            free(hashTable[i]->item);
+            freeLocations(hashTable[i]->locations);
+            free(hashTable[i]);
+            hashTable[i] = NULL;
+        }
+    }
+}
+
 int main() {
-    char* expected[] = {"sock_blue_left", "sock_blue_right", "onesie_size3", "hat_winter", "sock_blue_left"};
-    int expected_count = sizeof(expected) / sizeof(expected[0]);
-    char* packed[] = {"sock_blue_right", "onesie_size3", "hat_winter"};
-    int packed_count = sizeof(packed) / sizeof(packed[0]);
-
-    int missing_count;
-    char** missing = findMissingItems(expected, expected_count, packed, packed_count, &missing_count);
-
-    printf("Missing items:\n");
-    for (int i = 0; i < missing_count; i++) {
-        printf("- %s\n", missing[i]);
-        free(missing[i]); // Free the allocated strings
+    // Initialize hash table (optional, as it's global and defaults to NULL)
+    for (int i = 0; i < HASH_TABLE_SIZE; i++) {
+        hashTable[i] = NULL;
     }
-    free(missing); // Free the array of strings
+
+    // Populate the data (simulating the "cluttered environment")
+    insert("keys", "living room table");
+    insert("keys", "coat pocket");
+    insert("wallet", "backpack");
+    insert("phone", "kitchen counter");
+    insert("remote", "sofa");
+    insert("glasses", "nightstand");
+    insert("water bottle", "gym bag");
+    insert("water bottle", "car cup holder");
+
+    // Test Cases
+    char* targetItem1 = "keys";
+    printf("Possible locations for '%s':\n", targetItem1);
+    LocationNode* locations1 = search(targetItem1);
+    while (locations1) {
+        printf("- %s\n", locations1->location);
+        locations1 = locations1->next;
+    }
+    printf("\n");
+
+    char* targetItem2 = "remote";
+    printf("Possible locations for '%s':\n", targetItem2);
+    LocationNode* locations2 = search(targetItem2);
+    while (locations2) {
+        printf("- %s\n", locations2->location);
+        locations2 = locations2->next;
+    }
+    printf("\n");
+
+    char* targetItem3 = "book";
+    printf("Possible locations for '%s':\n", targetItem3);
+    LocationNode* locations3 = search(targetItem3);
+    if (locations3 == NULL) {
+        printf("'%s' not found in known locations.\n", targetItem3);
+    } else {
+        while (locations3) {
+            printf("- %s\n", locations3->location);
+            locations3 = locations3->next;
+        }
+    }
+    printf("\n");
+
+    // Free allocated memory
+    freeHashTable();
 
     return 0;
 }
