@@ -1,171 +1,158 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <time.h>
+#include <stdbool.h>
 
-// Define Patient structure
+#define MAX_PEOPLE 6 // Assuming a maximum number of people for simplicity
+
+// Structure to represent a person's preferences
 typedef struct {
-    int id;
-    int arrival_time;
-    int urgency;
-    int waiting_time;
-} Patient;
+    int preferred_neighbors[MAX_PEOPLE];
+    int num_preferred;
+    int disliked_neighbors[MAX_PEOPLE];
+    int num_disliked;
+    bool food_likes[MAX_PEOPLE]; // Assuming food IDs are 0 to MAX_PEOPLE - 1
+} PersonPreferences;
 
-// Define a Priority Queue (Min-Heap based on urgency, then arrival time)
-typedef struct {
-    Patient *heap;
-    int capacity;
-    int size;
-} PriorityQueue;
+// Function to calculate the happiness score of an arrangement
+int calculate_happiness(int arrangement[], int n, PersonPreferences preferences[], int num_dishes, int food_served[], bool food_preferences[][MAX_PEOPLE]) {
+    int happiness = 0;
+    for (int i = 0; i < n; i++) {
+        int current_person = arrangement[i];
+        int left_neighbor = arrangement[(i - 1 + n) % n];
+        int right_neighbor = arrangement[(i + 1) % n];
 
-PriorityQueue* createPriorityQueue(int capacity) {
-    PriorityQueue* pq = (PriorityQueue*)malloc(sizeof(PriorityQueue));
-    pq->capacity = capacity;
-    pq->size = 0;
-    pq->heap = (Patient*)malloc(sizeof(Patient) * capacity);
-    return pq;
+        // Check neighbor preferences
+        bool left_preferred = false;
+        for (int j = 0; j < preferences[current_person].num_preferred; j++) {
+            if (preferences[current_person].preferred_neighbors[j] == left_neighbor) {
+                left_preferred = true;
+                break;
+            }
+        }
+        bool right_preferred = false;
+        for (int j = 0; j < preferences[current_person].num_preferred; j++) {
+            if (preferences[current_person].preferred_neighbors[j] == right_neighbor) {
+                right_preferred = true;
+                break;
+            }
+        }
+
+        bool left_disliked = false;
+        for (int j = 0; j < preferences[current_person].num_disliked; j++) {
+            if (preferences[current_person].disliked_neighbors[j] == left_neighbor) {
+                left_disliked = true;
+                break;
+            }
+        }
+        bool right_disliked = false;
+        for (int j = 0; j < preferences[current_person].disliked_neighbors[j]) {
+            if (preferences[current_person].disliked_neighbors[j] == right_neighbor) {
+                right_disliked = true;
+                break;
+            }
+        }
+
+        if (left_preferred) happiness++;
+        if (right_preferred) happiness++;
+        if (left_disliked) happiness--;
+        if (right_disliked) happiness--;
+
+        // Check food preferences (simplified: if both like at least one common dish)
+        for (int j = 0; j < num_dishes; j++) {
+            if (food_preferences[current_person][food_served[j]] && food_preferences[left_neighbor][food_served[j]]) {
+                happiness++;
+            }
+            if (food_preferences[current_person][food_served[j]] && food_preferences[right_neighbor][food_served[j]]) {
+                happiness++;
+            }
+        }
+    }
+    return happiness;
 }
 
-void swap(Patient *a, Patient *b) {
-    Patient temp = *a;
-    *a = *b;
-    *b = temp;
-}
-
-// Heapify function (min-heap)
-void minHeapify(PriorityQueue* pq, int i) {
-    int smallest = i;
-    int left = 2 * i + 1;
-    int right = 2 * i + 2;
-
-    if (left < pq->size && (pq->heap[left].urgency > pq->heap[smallest].urgency ||
-                           (pq->heap[left].urgency == pq->heap[smallest].urgency && pq->heap[left].arrival_time < pq->heap[smallest].arrival_time))) {
-        smallest = left;
-    }
-
-    if (right < pq->size && (pq->heap[right].urgency > pq->heap[smallest].urgency ||
-                            (pq->heap[right].urgency == pq->heap[smallest].urgency && pq->heap[right].arrival_time < pq->heap[smallest].arrival_time))) {
-        smallest = right;
-    }
-
-    if (smallest != i) {
-        swap(&pq->heap[i], &pq->heap[smallest]);
-        minHeapify(pq, smallest);
-    }
-}
-
-void enqueue(PriorityQueue* pq, Patient patient) {
-    if (pq->size == pq->capacity) {
-        printf("Priority Queue Overflow!\n");
+// Backtracking function to find the optimal arrangement
+void find_optimal_arrangement(int n, PersonPreferences preferences[], int num_dishes, int food_served[], bool food_preferences[][MAX_PEOPLE], int current_arrangement[], bool placed[], int current_index, int* max_happiness, int best_arrangement[]) {
+    if (current_index == n) {
+        int current_happiness = calculate_happiness(current_arrangement, n, preferences, num_dishes, food_served, food_preferences);
+        if (current_happiness > *max_happiness) {
+            *max_happiness = current_happiness;
+            for (int i = 0; i < n; i++) {
+                best_arrangement[i] = current_arrangement[i];
+            }
+        }
         return;
     }
-    pq->heap[pq->size] = patient;
-    int i = pq->size;
-    while (i > 0 && (pq->heap[(i - 1) / 2].urgency < pq->heap[i].urgency ||
-                     (pq->heap[(i - 1) / 2].urgency == pq->heap[i].urgency && pq->heap[(i - 1) / 2].arrival_time > pq->heap[i].arrival_time))) {
-        swap(&pq->heap[i], &pq->heap[(i - 1) / 2]);
-        i = (i - 1) / 2;
-    }
-    pq->size++;
-}
 
-Patient dequeue(PriorityQueue* pq) {
-    if (pq->size <= 0) {
-        Patient empty_patient = {-1, -1, -1, -1};
-        return empty_patient; // Indicate empty queue
+    for (int i = 0; i < n; i++) {
+        if (!placed[i]) {
+            current_arrangement[current_index] = i;
+            placed[i] = true;
+
+            // Basic constraint check (can be enhanced for pruning)
+            if (current_index > 0) {
+                int current_person = current_arrangement[current_index];
+                int previous_person = current_arrangement[current_index - 1];
+                bool disliked = false;
+                for(int j = 0; j < preferences[current_person].num_disliked; j++) {
+                    if(preferences[current_person].disliked_neighbors[j] == previous_person) {
+                        disliked = true;
+                        break;
+                    }
+                }
+                if (!disliked) {
+                    find_optimal_arrangement(n, preferences, num_dishes, food_served, food_preferences, current_arrangement, placed, current_index + 1, max_happiness, best_arrangement);
+                }
+            } else {
+                find_optimal_arrangement(n, preferences, num_dishes, food_served, food_preferences, current_arrangement, placed, current_index + 1, max_happiness, best_arrangement);
+            }
+
+            placed[i] = false; // Backtrack
+        }
     }
-    if (pq->size == 1) {
-        pq->size--;
-        return pq->heap[0];
-    }
-    Patient root = pq->heap[0];
-    pq->heap[0] = pq->heap[pq->size - 1];
-    pq->size--;
-    minHeapify(pq, 0);
-    return root;
 }
 
 int main() {
-    srand(time(NULL)); // Seed random number generator
+    int n = 6; // Number of people
+    PersonPreferences preferences[MAX_PEOPLE];
 
-    int num_beds = 3;
-    int simulation_time = 20;
-    int next_patient_id = 0;
-
-    PriorityQueue* waiting_queue = createPriorityQueue(100); // Adjust capacity as needed
-    int occupied_beds[num_beds]; // Store patient IDs in occupied beds, -1 if empty
-    int bed_finish_times[num_beds]; // Store finish times for patients in beds
-
-    for (int i = 0; i < num_beds; i++) {
-        occupied_beds[i] = -1;
-        bed_finish_times[i] = 0;
+    // Initialize preferences (Example - needs to be filled with actual data)
+    for (int i = 0; i < n; i++) {
+        preferences[i].num_preferred = 0;
+        preferences[i].num_disliked = 0;
+        for(int j=0; j<n; ++j) preferences[i].food_likes[j] = false;
     }
 
-    int total_waiting_time = 0;
-    int num_treated_patients = 0;
+    // Example Preferences (Person 0)
+    preferences[0].preferred_neighbors[preferences[0].num_preferred++] = 1;
+    preferences[0].preferred_neighbors[preferences[0].num_preferred++] = 2;
+    preferences[0].disliked_neighbors[preferences[0].num_disliked++] = 3;
+    preferences[0].food_likes[0] = true; // Likes food 0
+    preferences[0].food_likes[1] = true; // Likes food 1
 
-    // Simulate time steps
-    for (int current_time = 0; current_time < simulation_time; current_time++) {
-        // Simulate patient arrivals (probabilistic)
-        if (rand() % 3 == 0) { // ~1/3 chance of a patient arriving
-            Patient new_patient;
-            new_patient.id = next_patient_id++;
-            new_patient.arrival_time = current_time;
-            new_patient.urgency = rand() % 5 + 1; // Urgency level 1 to 5
-            new_patient.waiting_time = 0;
-            printf("Time %d: Patient %d (Urgency %d) arrived.\n", current_time, new_patient.id, new_patient.urgency);
+    // ... Initialize preferences for other people ...
 
-            int assigned_bed = -1;
-            for (int i = 0; i < num_beds; i++) {
-                if (occupied_beds[i] == -1) {
-                    occupied_beds[i] = new_patient.id;
-                    bed_finish_times[i] = current_time + (rand() % 5 + 3); // Treatment duration 3 to 7 time units
-                    assigned_bed = i;
-                    printf("Time %d: Patient %d assigned to bed %d (finish time %d).\n", current_time, new_patient.id, i, bed_finish_times[i]);
-                    break;
-                }
-            }
+    int num_dishes = 2;
+    int food_served[] = {0, 1}; // Example food IDs
+    bool food_preferences_matrix[MAX_PEOPLE][MAX_PEOPLE] = {false}; // Needs initialization
 
-            if (assigned_bed == -1) {
-                enqueue(waiting_queue, new_patient);
-                printf("Time %d: Patient %d added to waiting queue.\n", current_time, new_patient.id);
-            }
-        }
+    // Example Food Preferences
+    food_preferences_matrix[0][0] = true;
+    food_preferences_matrix[0][1] = true;
+    food_preferences_matrix[1][0] = true;
+    // ... Initialize food preferences for other people ...
 
-        // Handle departures and assign new patients
-        for (int i = 0; i < num_beds; i++) {
-            if (occupied_beds[i] != -1 && current_time >= bed_finish_times[i]) {
-                printf("Time %d: Patient %d discharged from bed %d.\n", current_time, occupied_beds[i], i);
-                occupied_beds[i] = -1;
-                num_treated_patients++;
+    int initial_arrangement[MAX_PEOPLE];
+    bool placed[MAX_PEOPLE] = {false};
+    int max_happiness = -1000; // Initialize with a very low value
+    int best_arrangement[MAX_PEOPLE];
 
-                if (waiting_queue->size > 0) {
-                    Patient next_patient = dequeue(waiting_queue);
-                    total_waiting_time += (current_time - next_patient.arrival_time);
-                    occupied_beds[i] = next_patient.id;
-                    bed_finish_times[i] = current_time + (rand() % 5 + 3);
-                    printf("Time %d: Patient %d from queue assigned to bed %d (finish time %d).\n", current_time, next_patient.id, i, bed_finish_times[i]);
-                }
-            }
-        }
+    find_optimal_arrangement(n, preferences, num_dishes, food_served, food_preferences_matrix, initial_arrangement, placed, 0, &max_happiness, best_arrangement);
 
-        // Update waiting times for patients in the queue
-        for (int i = 0; i < waiting_queue->size; i++) {
-            waiting_queue->heap[i].waiting_time++;
-        }
+    printf("Optimal Seating Arrangement:\n");
+    for (int i = 0; i < n; i++) {
+        printf("Person %d ", best_arrangement[i]);
     }
-
-    if (num_treated_patients > 0) {
-        double average_waiting_time = (double)total_waiting_time / num_treated_patients;
-        printf("\nSimulation finished.\n");
-        printf("Total treated patients: %d\n", num_treated_patients);
-        printf("Total waiting time: %d\n", total_waiting_time);
-        printf("Average waiting time: %.2f\n", average_waiting_time);
-    } else {
-        printf("\nSimulation finished. No patients treated.\n");
-    }
-
-    free(waiting_queue->heap);
-    free(waiting_queue);
+    printf("\nMaximum Happiness: %d\n", max_happiness);
 
     return 0;
 }
