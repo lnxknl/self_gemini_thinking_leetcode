@@ -1,162 +1,189 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
 
-#define TABLE_SIZE 100  // Adjust size as needed
+// --- Data Structures ---
 
-// Structure to represent an ingredient
 typedef struct {
-    char* name;
-} Ingredient;
+    int user_id;
+    char** posts;
+    int num_posts;
+} User;
 
-// Structure to represent a drink recipe
-typedef struct Recipe {
-    char* drink_name;
-    Ingredient* ingredients;
-    int num_ingredients;
-    struct Recipe* next; // For collision handling (separate chaining)
-} Recipe;
-
-// Hash table structure
 typedef struct {
-    Recipe* table[TABLE_SIZE];
-} HashTable;
+    int user_id;
+    float hesitation_score;
+} Result;
 
-// Simple hash function (can be improved)
-unsigned int hash(const char* str) {
-    unsigned int hash = 5381;
-    int c;
-    while ((c = *str++))
-        hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
-    return hash % TABLE_SIZE;
+// --- Trie Implementation (Simplified for Keyword Counting) ---
+
+typedef struct TrieNode {
+    struct TrieNode* children[26]; // Assuming lowercase English letters
+    bool isEndOfWord;
+} TrieNode;
+
+TrieNode* createTrieNode() {
+    TrieNode* node = (TrieNode*)malloc(sizeof(TrieNode));
+    for (int i = 0; i < 26; i++) {
+        node->children[i] = NULL;
+    }
+    node->isEndOfWord = false;
+    return node;
 }
 
-// Function to create a new recipe
-Recipe* createRecipe(const char* drink_name, const char** ingredient_names, int num_ingredients) {
-    Recipe* new_recipe = (Recipe*)malloc(sizeof(Recipe));
-    if (!new_recipe) {
-        perror("Memory allocation failed");
-        exit(EXIT_FAILURE);
-    }
-    new_recipe->drink_name = strdup(drink_name);
-    new_recipe->ingredients = (Ingredient*)malloc(sizeof(Ingredient) * num_ingredients);
-    if (!new_recipe->ingredients) {
-        perror("Memory allocation failed");
-        exit(EXIT_FAILURE);
-    }
-    new_recipe->num_ingredients = num_ingredients;
-    for (int i = 0; i < num_ingredients; i++) {
-        new_recipe->ingredients[i].name = strdup(ingredient_names[i]);
-    }
-    new_recipe->next = NULL;
-    return new_recipe;
-}
-
-// Function to initialize the hash table
-HashTable* createHashTable() {
-    HashTable* ht = (HashTable*)malloc(sizeof(HashTable));
-    if (!ht) {
-        perror("Memory allocation failed");
-        exit(EXIT_FAILURE);
-    }
-    for (int i = 0; i < TABLE_SIZE; i++) {
-        ht->table[i] = NULL;
-    }
-    return ht;
-}
-
-// Function to add a recipe to the hash table
-void addRecipe(HashTable* ht, const char* drink_name, const char** ingredient_names, int num_ingredients) {
-    unsigned int index = hash(drink_name);
-    Recipe* new_recipe = createRecipe(drink_name, ingredient_names, num_ingredients);
-    if (!ht->table[index]) {
-        ht->table[index] = new_recipe;
-    } else {
-        // Handle collision: add to the beginning of the linked list
-        new_recipe->next = ht->table[index];
-        ht->table[index] = new_recipe;
-    }
-}
-
-// Function to get a recipe from the hash table
-Recipe* getRecipe(HashTable* ht, const char* drink_name) {
-    unsigned int index = hash(drink_name);
-    Recipe* current = ht->table[index];
-    while (current) {
-        if (strcmp(current->drink_name, drink_name) == 0) {
-            return current;
+void insert(TrieNode* root, const char* word) {
+    TrieNode* curr = root;
+    for (int i = 0; word[i] != '\0'; i++) {
+        int index = word[i] - 'a';
+        if (curr->children[index] == NULL) {
+            curr->children[index] = createTrieNode();
         }
-        current = current->next;
+        curr = curr->children[index];
     }
-    return NULL; // Recipe not found
+    curr->isEndOfWord = true;
 }
 
-// Function to free the memory allocated for a recipe
-void freeRecipe(Recipe* recipe) {
-    if (recipe) {
-        free(recipe->drink_name);
-        for (int i = 0; i < recipe->num_ingredients; i++) {
-            free(recipe->ingredients[i].name);
-        }
-        free(recipe->ingredients);
-        free(recipe);
-    }
-}
-
-// Function to free the memory allocated for the hash table
-void freeHashTable(HashTable* ht) {
-    if (ht) {
-        for (int i = 0; i < TABLE_SIZE; i++) {
-            Recipe* current = ht->table[i];
-            while (current) {
-                Recipe* temp = current;
-                current = current->next;
-                freeRecipe(temp);
+int countOccurrences(TrieNode* root, const char* text) {
+    int count = 0;
+    int n = strlen(text);
+    for (int i = 0; i < n; i++) {
+        TrieNode* curr = root;
+        for (int j = i; j < n; j++) {
+            if (text[j] >= 'a' && text[j] <= 'z') {
+                int index = text[j] - 'a';
+                if (curr->children[index] == NULL) {
+                    break;
+                }
+                curr = curr->children[index];
+                if (curr->isEndOfWord) {
+                    count++;
+                }
+            } else {
+                break; // Consider only contiguous lowercase words for simplicity
             }
         }
-        free(ht);
     }
+    return count;
 }
 
+// --- Main Logic ---
+
+Result* calculateHesitationScores(User* users, int num_users, int** friendships, int num_friendships, char** keywords, int num_keywords) {
+    // 1. Preprocessing: Create user map and adjacency list
+    User* user_map = (User*)malloc(sizeof(User) * num_users);
+    int* adj_list[num_users];
+    int adj_counts[num_users];
+    for (int i = 0; i < num_users; i++) {
+        user_map[i] = users[i];
+        adj_list[i] = NULL;
+        adj_counts[i] = 0;
+    }
+
+    for (int i = 0; i < num_friendships; i++) {
+        int user1_id = friendships[i][0];
+        int user2_id = friendships[i][1];
+
+        // Find indices in user_map
+        int index1 = -1, index2 = -1;
+        for (int j = 0; j < num_users; j++) {
+            if (user_map[j].user_id == user1_id) index1 = j;
+            if (user_map[j].user_id == user2_id) index2 = j;
+        }
+
+        if (index1 != -1 && index2 != -1) {
+            // Add to adjacency list (undirected)
+            adj_counts[index1]++;
+            adj_list[index1] = (int*)realloc(adj_list[index1], sizeof(int) * adj_counts[index1]);
+            adj_list[index1][adj_counts[index1] - 1] = user2_id;
+
+            adj_counts[index2]++;
+            adj_list[index2] = (int*)realloc(adj_list[index2], sizeof(int) * adj_counts[index2]);
+            adj_list[index2][adj_counts[index2] - 1] = user1_id;
+        }
+    }
+
+    // 2. Build Trie from keywords
+    TrieNode* root = createTrieNode();
+    for (int i = 0; i < num_keywords; i++) {
+        insert(root, keywords[i]);
+    }
+
+    // 3. Calculate initial hesitation scores (based on text)
+    float* hesitation_scores = (float*)malloc(sizeof(float) * num_users);
+    for (int i = 0; i < num_users; i++) {
+        int total_keyword_count = 0;
+        for (int j = 0; j < users[i].num_posts; j++) {
+            total_keyword_count += countOccurrences(root, users[i].posts[j]);
+        }
+        hesitation_scores[i] = (float)total_keyword_count; // Simple count as initial score
+    }
+
+    // 4. Iterative score refinement
+    int num_iterations = 10;
+    float alpha = 0.5;
+    for (int iter = 0; iter < num_iterations; iter++) {
+        float* new_hesitation_scores = (float*)malloc(sizeof(float) * num_users);
+        for (int i = 0; i < num_users; i++) {
+            float friend_score_sum = 0;
+            int friend_count = 0;
+            for (int j = 0; j < adj_counts[i]; j++) {
+                int friend_id = adj_list[i][j];
+                for (int k = 0; k < num_users; k++) {
+                    if (user_map[k].user_id == friend_id) {
+                        friend_score_sum += hesitation_scores[k];
+                        friend_count++;
+                        break;
+                    }
+                }
+            }
+            float average_friend_score = (friend_count > 0) ? friend_score_sum / friend_count : 0;
+            new_hesitation_scores[i] = alpha * hesitation_scores[i] + (1 - alpha) * average_friend_score;
+        }
+        free(hesitation_scores);
+        hesitation_scores = new_hesitation_scores;
+    }
+
+    // 5. Prepare output
+    Result* results = (Result*)malloc(sizeof(Result) * num_users);
+    for (int i = 0; i < num_users; i++) {
+        results[i].user_id = users[i].user_id;
+        results[i].hesitation_score = hesitation_scores[i];
+    }
+
+    // Clean up memory (Trie needs proper freeing, omitted for brevity)
+    free(hesitation_scores);
+    for (int i = 0; i < num_users; i++) {
+        free(adj_list[i]);
+    }
+
+    return results;
+}
+
+// --- Test Example ---
 int main() {
-    // Initialize the bartender's recipe book (hash table)
-    HashTable* recipe_book = createHashTable();
+    // Example Input
+    User users[] = {
+        {1, (char*[]){"I'm not sure about marriage anymore.", "Single life is great."}, 2},
+        {2, (char*[]){"My friend's divorce was terrible.", "Focusing on my career."}, 2},
+        {3, (char*[]){"Happy for my married friends.", "Thinking about the future."}, 2},
+        {4, (char*[]){"Marriage seems like a trap.", "Enjoying my freedom."}, 2}
+    };
+    int num_users = sizeof(users) / sizeof(users[0]);
 
-    // Add some popular drink recipes
-    const char* martini_ingredients[] = {"Gin", "Dry Vermouth", "Olive or Lemon Twist"};
-    addRecipe(recipe_book, "Martini", martini_ingredients, 3);
+    int friendships[][2] = {{1, 2}, {2, 3}, {4, 1}};
+    int num_friendships = sizeof(friendships) / sizeof(friendships[0]);
 
-    const char* margarita_ingredients[] = {"Tequila", "Lime Juice", "Cointreau"};
-    addRecipe(recipe_book, "Margarita", margarita_ingredients, 3);
+    char* keywords[] = {"marriage", "single", "divorce", "trap", "freedom"};
+    int num_keywords = sizeof(keywords) / sizeof(keywords[0]);
 
-    const char* mojito_ingredients[] = {"White Rum", "Sugar", "Lime Juice", "Soda Water", "Mint"};
-    addRecipe(recipe_book, "Mojito", mojito_ingredients, 5);
+    Result* results = calculateHesitationScores(users, num_users, (int**)friendships, num_friendships, keywords, num_keywords);
 
-    // Test customer orders
-    const char* order1 = "Martini";
-    Recipe* recipe1 = getRecipe(recipe_book, order1);
-    if (recipe1) {
-        printf("Bartender knows how to make a %s. Ingredients:\n", recipe1->drink_name);
-        for (int i = 0; i < recipe1->num_ingredients; i++) {
-            printf("- %s\n", recipe1->ingredients[i].name);
-        }
-    } else {
-        printf("Bartender doesn't know how to make a %s.\n", order1);
+    printf("Hesitation Scores:\n");
+    for (int i = 0; i < num_users; i++) {
+        printf("User ID: %d, Score: %.2f\n", results[i].user_id, results[i].hesitation_score);
     }
 
-    const char* order2 = "Cosmopolitan";
-    Recipe* recipe2 = getRecipe(recipe_book, order2);
-    if (recipe2) {
-        printf("Bartender knows how to make a %s. Ingredients:\n", recipe2->drink_name);
-        for (int i = 0; i < recipe2->num_ingredients; i++) {
-            printf("- %s\n", recipe2->ingredients[i].name);
-        }
-    } else {
-        printf("Bartender doesn't know how to make a %s.\n", order2);
-    }
-
-    // Clean up memory
-    freeHashTable(recipe_book);
-
+    free(results);
     return 0;
 }
