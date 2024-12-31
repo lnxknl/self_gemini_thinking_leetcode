@@ -2,147 +2,72 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define HASH_TABLE_SIZE 101 // A prime number for better distribution
+// Struct to represent a person
+typedef struct {
+    int personality; // -1 (pessimistic) to 1 (optimistic)
+    int mood;       // -5 (very negative) to 5 (very positive)
+    int communication_style; // 0 (indirect) to 1 (direct)
+} Person;
 
-// Linked List Node for Locations
-typedef struct LocationNode {
-    char* location;
-    struct LocationNode* next;
-} LocationNode;
-
-// Hash Table Entry
-typedef struct HashTableEntry {
-    char* item;
-    LocationNode* locations;
-} HashTableEntry;
-
-HashTableEntry* hashTable[HASH_TABLE_SIZE];
-
-// Hash Function (simple polynomial rolling hash)
-unsigned long hash(const char* str) {
-    unsigned long hash = 5381;
-    int c;
-    while ((c = *str++))
-        hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
-    return hash % HASH_TABLE_SIZE;
+// Simple sentiment analysis (hardcoded for demonstration)
+int get_sentiment(const char *text) {
+    if (strstr(text, "happy") || strstr(text, "good") || strstr(text, "agree")) return 1;
+    if (strstr(text, "sad") || strstr(text, "bad") || strstr(text, "disagree")) return -1;
+    return 0;
 }
 
-// Create a new location node
-LocationNode* createLocationNode(const char* location) {
-    LocationNode* newNode = (LocationNode*)malloc(sizeof(LocationNode));
-    if (!newNode) {
-        perror("Memory allocation failed");
-        exit(EXIT_FAILURE);
-    }
-    newNode->location = strdup(location);
-    newNode->next = NULL;
-    return newNode;
+// Function to update the mood of a person
+void update_state(Person *p, const char *interaction, const Person *other_person) {
+    int sentiment = get_sentiment(interaction);
+    p->mood += sentiment * (other_person->communication_style + 1); // Direct has more impact
+    // Add some influence from personality
+    p->mood += p->personality * sentiment;
+    // Clamp mood
+    if (p->mood > 5) p->mood = 5;
+    if (p->mood < -5) p->mood = -5;
 }
 
-// Insert a location for an item
-void insert(const char* item, const char* location) {
-    unsigned long index = hash(item);
-
-    // Check if the item already exists
-    if (hashTable[index] != NULL && strcmp(hashTable[index]->item, item) == 0) {
-        // Add location to the beginning of the linked list
-        LocationNode* newNode = createLocationNode(location);
-        newNode->next = hashTable[index]->locations;
-        hashTable[index]->locations = newNode;
-    } else {
-        // Create a new entry
-        HashTableEntry* newEntry = (HashTableEntry*)malloc(sizeof(HashTableEntry));
-        if (!newEntry) {
-            perror("Memory allocation failed");
-            exit(EXIT_FAILURE);
+// Function to simulate the interaction
+int simulate_interaction(Person *person1, Person *person2, char **interactions, int num_interactions) {
+    for (int i = 0; i < num_interactions; i++) {
+        if (i % 2 == 0) { // Person 1 speaks
+            update_state(person2, interactions[i], person1);
+        } else { // Person 2 speaks
+            update_state(person1, interactions[i], person2);
         }
-        newEntry->item = strdup(item);
-        newEntry->locations = createLocationNode(location);
-        hashTable[index] = newEntry;
-    }
-}
-
-// Search for an item and return its locations
-LocationNode* search(const char* item) {
-    unsigned long index = hash(item);
-    if (hashTable[index] != NULL && strcmp(hashTable[index]->item, item) == 0) {
-        return hashTable[index]->locations;
-    }
-    return NULL;
-}
-
-// Function to free the linked list of locations
-void freeLocations(LocationNode* head) {
-    while (head) {
-        LocationNode* temp = head;
-        head = head->next;
-        free(temp->location);
-        free(temp);
-    }
-}
-
-// Function to free the hash table
-void freeHashTable() {
-    for (int i = 0; i < HASH_TABLE_SIZE; i++) {
-        if (hashTable[i]) {
-            free(hashTable[i]->item);
-            freeLocations(hashTable[i]->locations);
-            free(hashTable[i]);
-            hashTable[i] = NULL;
+        // Check for positive resolution (simplified)
+        if (person1->mood > 2 && person2->mood > 2) {
+            return 1; // Positive resolution
         }
     }
+    return 0; // No positive resolution
 }
 
 int main() {
-    // Initialize hash table (optional, as it's global and defaults to NULL)
-    for (int i = 0; i < HASH_TABLE_SIZE; i++) {
-        hashTable[i] = NULL;
-    }
+    Person alice = {1, 0, 1}; // Optimistic, neutral mood, direct communicator
+    Person bob = {-1, 0, 0};  // Pessimistic, neutral mood, indirect communicator
 
-    // Populate the data (simulating the "cluttered environment")
-    insert("keys", "living room table");
-    insert("keys", "coat pocket");
-    insert("wallet", "backpack");
-    insert("phone", "kitchen counter");
-    insert("remote", "sofa");
-    insert("glasses", "nightstand");
-    insert("water bottle", "gym bag");
-    insert("water bottle", "car cup holder");
+    char *interactions[] = {
+        "Hi, how are you?",
+        "I'm okay.",
+        "That's good to hear.",
+        "Yeah, I guess.",
+        "Did you like the movie?",
+        "It was alright.",
+        "I thought it was great!",
+        "Hmm, maybe.",
+        "So, we're on for tomorrow?",
+        "Sure, if you want."
+    };
+    int num_interactions = sizeof(interactions) / sizeof(interactions[0]);
 
-    // Test Cases
-    char* targetItem1 = "keys";
-    printf("Possible locations for '%s':\n", targetItem1);
-    LocationNode* locations1 = search(targetItem1);
-    while (locations1) {
-        printf("- %s\n", locations1->location);
-        locations1 = locations1->next;
-    }
-    printf("\n");
+    int outcome = simulate_interaction(&alice, &bob, interactions, num_interactions);
 
-    char* targetItem2 = "remote";
-    printf("Possible locations for '%s':\n", targetItem2);
-    LocationNode* locations2 = search(targetItem2);
-    while (locations2) {
-        printf("- %s\n", locations2->location);
-        locations2 = locations2->next;
-    }
-    printf("\n");
-
-    char* targetItem3 = "book";
-    printf("Possible locations for '%s':\n", targetItem3);
-    LocationNode* locations3 = search(targetItem3);
-    if (locations3 == NULL) {
-        printf("'%s' not found in known locations.\n", targetItem3);
+    if (outcome == 1) {
+        printf("Likelihood of positive resolution: High\n");
     } else {
-        while (locations3) {
-            printf("- %s\n", locations3->location);
-            locations3 = locations3->next;
-        }
+        printf("Likelihood of positive resolution: Low\n");
     }
-    printf("\n");
-
-    // Free allocated memory
-    freeHashTable();
 
     return 0;
 }
