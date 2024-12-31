@@ -2,83 +2,266 @@
 #include <stdlib.h>
 #include <stdbool.h>
 
-// Structure to represent a time interval
+// Call structure
 typedef struct {
-    int start_time;
-    int end_time;
-} Interval;
+    int arrival_time;
+    int priority;
+    int call_id;
+} Call;
 
-// Structure to represent a task
+// Priority Queue (Max Heap) implementation for calls
 typedef struct {
-    int task_id;
-    int duration;
-} Task;
+    Call* heap;
+    int size;
+    int capacity;
+} CallPriorityQueue;
 
-// Structure to represent a scheduled event
-typedef struct {
-    int task_id;
-    int individual_id;
-    int start_time;
-    int end_time;
-} ScheduledEvent;
-
-// Function to check if a task can be scheduled within an interval
-bool can_schedule(int task_duration, Interval interval) {
-    return interval.end_time - interval.start_time >= task_duration;
+CallPriorityQueue* createCallPriorityQueue(int capacity) {
+    CallPriorityQueue* pq = (CallPriorityQueue*)malloc(sizeof(CallPriorityQueue));
+    pq->heap = (Call*)malloc(capacity * sizeof(Call));
+    pq->size = 0;
+    pq->capacity = capacity;
+    return pq;
 }
 
-// Function to find the optimal schedule (basic backtracking - needs more sophisticated implementation for efficiency)
-// This is a simplified illustration and a full implementation would be much more complex.
-void find_optimal_schedule(int num_tasks, Task tasks[], int num_individuals, int individuals[],
-                           Interval **availability, int **preferences, int max_preferences, ScheduledEvent current_schedule[], int num_scheduled) {
-    if (num_scheduled == num_tasks) {
-        // All tasks scheduled, evaluate preferences (implementation needed)
-        int current_preferences = 0; // Calculate based on preferences
-        if (current_preferences > max_preferences) {
-            max_preferences = current_preferences;
-            // Store the current_schedule as the best schedule
+void swapCalls(Call* a, Call* b) {
+    Call temp = *a;
+    *a = *b;
+    *b = temp;
+}
+
+void callHeapifyUp(CallPriorityQueue* pq, int index) {
+    while (index > 0) {
+        int parentIndex = (index - 1) / 2;
+        if (pq->heap[index].priority > pq->heap[parentIndex].priority ||
+            (pq->heap[index].priority == pq->heap[parentIndex].priority &&
+             pq->heap[index].arrival_time < pq->heap[parentIndex].arrival_time)) {
+            swapCalls(&pq->heap[index], &pq->heap[parentIndex]);
+            index = parentIndex;
+        } else {
+            break;
         }
+    }
+}
+
+void callInsert(CallPriorityQueue* pq, Call call) {
+    if (pq->size == pq->capacity) {
+        // Handle resizing if needed
         return;
     }
+    pq->heap[pq->size] = call;
+    callHeapifyUp(pq, pq->size);
+    pq->size++;
+}
 
-    // Example of a very basic, incomplete backtracking step
-    int current_task_index = num_scheduled; // Assume tasks are scheduled in order
-    for (int i = 0; i < num_individuals; i++) {
-        int individual_id = individuals[i];
-        // Iterate through availability and try to schedule
-        // ... (Complex logic for finding suitable time slots and avoiding overlaps needed)
+void callHeapifyDown(CallPriorityQueue* pq, int index) {
+    int left = 2 * index + 1;
+    int right = 2 * index + 2;
+    int largest = index;
+
+    if (left < pq->size && (pq->heap[left].priority > pq->heap[largest].priority ||
+                           (pq->heap[left].priority == pq->heap[largest].priority &&
+                            pq->heap[left].arrival_time < pq->heap[largest].arrival_time))) {
+        largest = left;
     }
+
+    if (right < pq->size && (pq->heap[right].priority > pq->heap[largest].priority ||
+                            (pq->heap[right].priority == pq->heap[largest].priority &&
+                             pq->heap[right].arrival_time < pq->heap[largest].arrival_time))) {
+        largest = right;
+    }
+
+    if (largest != index) {
+        swapCalls(&pq->heap[index], &pq->heap[largest]);
+        callHeapifyDown(pq, largest);
+    }
+}
+
+Call callExtractMax(CallPriorityQueue* pq) {
+    if (pq->size <= 0) {
+        Call emptyCall = {-1, -1, -1}; // Indicate error or empty
+        return emptyCall;
+    }
+    if (pq->size == 1) {
+        pq->size--;
+        return pq->heap[0];
+    }
+    Call maxCall = pq->heap[0];
+    pq->heap[0] = pq->heap[pq->size - 1];
+    pq->size--;
+    callHeapifyDown(pq, 0);
+    return maxCall;
+}
+
+bool isCallPriorityQueueEmpty(CallPriorityQueue* pq) {
+    return pq->size == 0;
+}
+
+// Min Heap implementation for agent availability times
+typedef struct {
+    int* heap;
+    int size;
+    int capacity;
+} MinHeap;
+
+MinHeap* createMinHeap(int capacity) {
+    MinHeap* mh = (MinHeap*)malloc(sizeof(MinHeap));
+    mh->heap = (int*)malloc(capacity * sizeof(int));
+    mh->size = 0;
+    mh->capacity = capacity;
+    return mh;
+}
+
+void minHeapifyUp(MinHeap* mh, int index) {
+    while (index > 0) {
+        int parentIndex = (index - 1) / 2;
+        if (mh->heap[index] < mh->heap[parentIndex]) {
+            int temp = mh->heap[index];
+            mh->heap[index] = mh->heap[parentIndex];
+            mh->heap[parentIndex] = temp;
+            index = parentIndex;
+        } else {
+            break;
+        }
+    }
+}
+
+void minInsert(MinHeap* mh, int key) {
+    if (mh->size == mh->capacity) {
+        // Handle resizing if needed
+        return;
+    }
+    mh->heap[mh->size] = key;
+    minHeapifyUp(mh, mh->size);
+    mh->size++;
+}
+
+void minHeapifyDown(MinHeap* mh, int index) {
+    int left = 2 * index + 1;
+    int right = 2 * index + 2;
+    int smallest = index;
+
+    if (left < mh->size && mh->heap[left] < mh->heap[smallest]) {
+        smallest = left;
+    }
+
+    if (right < mh->size && mh->heap[right] < mh->heap[smallest]) {
+        smallest = right;
+    }
+
+    if (smallest != index) {
+        int temp = mh->heap[index];
+        mh->heap[index] = mh->heap[smallest];
+        mh->heap[smallest] = temp;
+        minHeapifyDown(mh, smallest);
+    }
+}
+
+int extractMin(MinHeap* mh) {
+    if (mh->size <= 0) {
+        return -1; // Indicate error or empty
+    }
+    if (mh->size == 1) {
+        mh->size--;
+        return mh->heap[0];
+    }
+    int min = mh->heap[0];
+    mh->heap[0] = mh->heap[mh->size - 1];
+    mh->size--;
+    minHeapifyDown(mh, 0);
+    return min;
+}
+
+int compareCalls(const void* a, const void* b) {
+    Call* callA = (Call*)a;
+    Call* callB = (Call*)b;
+    if (callA->arrival_time != callB->arrival_time) {
+        return callA->arrival_time - callB->arrival_time;
+    }
+    return callB->priority - callA->priority; // Higher priority first
+}
+
+int processHotlineCalls(Call* calls, int num_calls, int num_agents) {
+    qsort(calls, num_calls, sizeof(Call), compareCalls);
+
+    CallPriorityQueue* waiting_calls = createCallPriorityQueue(num_calls);
+    MinHeap* agent_availability = createMinHeap(num_agents);
+    for (int i = 0; i < num_agents; i++) {
+        minInsert(agent_availability, 0); // Initialize all agents as available at time 0
+    }
+
+    int total_waiting_time = 0;
+    int call_index = 0;
+    int current_time = 0;
+
+    while (call_index < num_calls || !isCallPriorityQueueEmpty(waiting_calls)) {
+        // Advance time to the next relevant event (either a call arrival or an agent becoming free)
+        int next_event_time = -1;
+        if (call_index < num_calls) {
+            next_event_time = calls[call_index].arrival_time;
+        }
+        if (!isCallPriorityQueueEmpty(waiting_calls) && agent_availability->size > 0) {
+            int next_agent_free_time = agent_availability->heap[0];
+            if (next_event_time == -1 || next_agent_free_time < next_event_time) {
+                next_event_time = next_agent_free_time;
+            }
+        }
+
+        if (next_event_time != -1 && next_event_time > current_time) {
+            current_time = next_event_time;
+        }
+
+        // Add arrived calls to the priority queue
+        while (call_index < num_calls && calls[call_index].arrival_time <= current_time) {
+            callInsert(waiting_calls, calls[call_index]);
+            call_index++;
+        }
+
+        // Assign calls to available agents
+        while (!isCallPriorityQueueEmpty(waiting_calls) && agent_availability->size > 0) {
+            Call next_call = callExtractMax(waiting_calls);
+            int agent_available_time = extractMin(agent_availability);
+            int start_processing_time = (current_time > agent_available_time) ? current_time : agent_available_time;
+            int waiting_time = start_processing_time - next_call.arrival_time;
+            total_waiting_time += waiting_time;
+
+            // Assume processing time of 1 for simplicity
+            int finish_time = start_processing_time + 1;
+            minInsert(agent_availability, finish_time);
+        }
+    }
+
+    free(waiting_calls->heap);
+    free(waiting_calls);
+    free(agent_availability->heap);
+    free(agent_availability);
+
+    return total_waiting_time;
 }
 
 int main() {
-    // Example Input
-    int individuals[] = {0, 1};
-    int num_individuals = 2;
+    // Test Example Input
+    Call calls[] = {
+        {0, 2, 1},
+        {0, 1, 2},
+        {1, 3, 3},
+        {3, 1, 4}
+    };
+    int num_calls = sizeof(calls) / sizeof(calls[0]);
+    int num_agents = 1;
 
-    Task tasks[] = {{0, 60}, {1, 90}};
-    int num_tasks = 2;
+    int total_wait = processHotlineCalls(calls, num_calls, num_agents);
+    printf("Total waiting time: %d\n", total_wait); // Expected output: 2
 
-    Interval availability_0[] = {{0, 120}, {180, 240}};
-    Interval availability_1[] = {{30, 150}};
-
-    Interval *availability[] = {availability_0, availability_1}; // Simplified - needs proper handling of multiple intervals
-
-    int preferences_0[] = {0}; // Individual 0 prefers task 0
-    int preferences_1[] = {1}; // Individual 1 prefers task 1
-
-    int *preferences[] = {preferences_0, preferences_1};
-
-    ScheduledEvent optimal_schedule[num_tasks];
-    int max_preferences = 0;
-    ScheduledEvent current_schedule[num_tasks];
-
-    printf("This problem requires a more sophisticated backtracking or constraint satisfaction algorithm. The basic structure is outlined.\n");
-
-    // Call the function to find the optimal schedule (implementation needed)
-    // find_optimal_schedule(num_tasks, tasks, num_individuals, individuals, availability, preferences, max_preferences, current_schedule, 0);
-
-    // Output the optimal schedule (implementation needed)
-    // printf("Optimal Schedule with Maximum Preferences: %d\n", max_preferences);
+    Call calls2[] = {
+        {0, 1, 1},
+        {0, 1, 2},
+        {0, 1, 3}
+    };
+    int num_calls2 = sizeof(calls2) / sizeof(calls2[0]);
+    int num_agents2 = 2;
+    int total_wait2 = processHotlineCalls(calls2, num_calls2, num_agents2);
+    printf("Total waiting time: %d\n", total_wait2); // Expected output: 0
 
     return 0;
 }
