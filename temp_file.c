@@ -1,186 +1,84 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <stdbool.h>
 
-// Structure for linked list node (idea sequence)
-typedef struct IdeaNode {
-    char* action;
-    struct IdeaNode* next;
-} IdeaNode;
+// Structure to represent a time interval
+typedef struct {
+    int start_time;
+    int end_time;
+} Interval;
 
-// Structure for hash table entry (constraints)
-typedef struct ConstraintEntry {
-    char* key;
-    bool value;
-    struct ConstraintEntry* next; // For handling collisions (simple chaining)
-} ConstraintEntry;
+// Structure to represent a task
+typedef struct {
+    int task_id;
+    int duration;
+} Task;
 
-#define HASH_TABLE_SIZE 10 // Simple hash table size
+// Structure to represent a scheduled event
+typedef struct {
+    int task_id;
+    int individual_id;
+    int start_time;
+    int end_time;
+} ScheduledEvent;
 
-// Simple hash function
-unsigned int hash(const char* key) {
-    unsigned int hashVal = 0;
-    while (*key != '\0') {
-        hashVal = (hashVal << 5) + *key++;
-    }
-    return hashVal % HASH_TABLE_SIZE;
+// Function to check if a task can be scheduled within an interval
+bool can_schedule(int task_duration, Interval interval) {
+    return interval.end_time - interval.start_time >= task_duration;
 }
 
-// Function to insert a constraint into the hash table
-void insertConstraint(ConstraintEntry** hashTable, const char* key, bool value) {
-    unsigned int index = hash(key);
-    ConstraintEntry* newEntry = (ConstraintEntry*)malloc(sizeof(ConstraintEntry));
-    if (!newEntry) {
-        perror("Memory allocation failed");
-        exit(EXIT_FAILURE);
-    }
-    newEntry->key = strdup(key);
-    newEntry->value = value;
-    newEntry->next = hashTable[index];
-    hashTable[index] = newEntry;
-}
-
-// Function to get the value of a constraint
-bool getConstraintValue(ConstraintEntry** hashTable, const char* key) {
-    unsigned int index = hash(key);
-    ConstraintEntry* current = hashTable[index];
-    while (current != NULL) {
-        if (strcmp(current->key, key) == 0) {
-            return current->value;
+// Function to find the optimal schedule (basic backtracking - needs more sophisticated implementation for efficiency)
+// This is a simplified illustration and a full implementation would be much more complex.
+void find_optimal_schedule(int num_tasks, Task tasks[], int num_individuals, int individuals[],
+                           Interval **availability, int **preferences, int max_preferences, ScheduledEvent current_schedule[], int num_scheduled) {
+    if (num_scheduled == num_tasks) {
+        // All tasks scheduled, evaluate preferences (implementation needed)
+        int current_preferences = 0; // Calculate based on preferences
+        if (current_preferences > max_preferences) {
+            max_preferences = current_preferences;
+            // Store the current_schedule as the best schedule
         }
-        current = current->next;
-    }
-    return false; // Constraint not found or inactive
-}
-
-// Structure for linked list node (validation messages)
-typedef struct MessageNode {
-    char* message;
-    struct MessageNode* next;
-} MessageNode;
-
-// Function to add a message to the validation messages list
-void addMessage(MessageNode** head, const char* message) {
-    MessageNode* newNode = (MessageNode*)malloc(sizeof(MessageNode));
-    if (!newNode) {
-        perror("Memory allocation failed");
-        exit(EXIT_FAILURE);
-    }
-    newNode->message = strdup(message);
-    newNode->next = *head;
-    *head = newNode;
-}
-
-// Function to validate the idea sequence against constraints
-MessageNode* validateIdea(IdeaNode* idea_sequence, ConstraintEntry** constraints) {
-    MessageNode* validation_messages = NULL;
-    IdeaNode* current_action = idea_sequence;
-
-    while (current_action != NULL) {
-        bool violation_found = false;
-        for (int i = 0; i < HASH_TABLE_SIZE; i++) {
-            ConstraintEntry* current_constraint = constraints[i];
-            while (current_constraint != NULL) {
-                if (current_constraint->value && strcmp(current_action->action, current_constraint->key) == 0) {
-                    char message[200];
-                    sprintf(message, "Action '%s' violates constraint '%s'.", current_action->action, current_constraint->key);
-                    addMessage(&validation_messages, message);
-                    violation_found = true;
-                    break; // Move to the next action
-                }
-                current_constraint = current_constraint->next;
-            }
-            if (violation_found) break;
-        }
-        if (!violation_found) {
-            char message[100];
-            sprintf(message, "Action '%s' is valid.", current_action->action);
-            addMessage(&validation_messages, message);
-        }
-        current_action = current_action->next;
+        return;
     }
 
-    return validation_messages;
-}
-
-// Function to print the validation messages
-void printMessages(MessageNode* head) {
-    MessageNode* current = head;
-    while (current != NULL) {
-        printf("%s\n", current->message);
-        current = current->next;
-    }
-}
-
-// Function to free the linked list
-void freeLinkedList(IdeaNode* head) {
-    while (head != NULL) {
-        IdeaNode* temp = head;
-        head = head->next;
-        free(temp->action);
-        free(temp);
-    }
-}
-
-// Function to free the hash table
-void freeHashTable(ConstraintEntry** hashTable) {
-    for (int i = 0; i < HASH_TABLE_SIZE; i++) {
-        ConstraintEntry* current = hashTable[i];
-        while (current != NULL) {
-            ConstraintEntry* temp = current;
-            current = current->next;
-            free(temp->key);
-            free(temp);
-        }
-    }
-}
-
-// Function to free the validation messages list
-void freeMessages(MessageNode* head) {
-    while (head != NULL) {
-        MessageNode* temp = head;
-        head = head->next;
-        free(temp->message);
-        free(temp);
+    // Example of a very basic, incomplete backtracking step
+    int current_task_index = num_scheduled; // Assume tasks are scheduled in order
+    for (int i = 0; i < num_individuals; i++) {
+        int individual_id = individuals[i];
+        // Iterate through availability and try to schedule
+        // ... (Complex logic for finding suitable time slots and avoiding overlaps needed)
     }
 }
 
 int main() {
     // Example Input
-    IdeaNode* idea_sequence = NULL;
-    // Add actions to the idea sequence (in reverse order for easier insertion at head)
-    IdeaNode* action3 = (IdeaNode*)malloc(sizeof(IdeaNode));
-    action3->action = strdup("Implement Feature X");
-    action3->next = idea_sequence;
-    idea_sequence = action3;
+    int individuals[] = {0, 1};
+    int num_individuals = 2;
 
-    IdeaNode* action2 = (IdeaNode*)malloc(sizeof(IdeaNode));
-    action2->action = strdup("Deploy to Production");
-    action2->next = idea_sequence;
-    idea_sequence = action2;
+    Task tasks[] = {{0, 60}, {1, 90}};
+    int num_tasks = 2;
 
-    IdeaNode* action1 = (IdeaNode*)malloc(sizeof(IdeaNode));
-    action1->action = strdup("Write Code");
-    action1->next = idea_sequence;
-    idea_sequence = action1;
+    Interval availability_0[] = {{0, 120}, {180, 240}};
+    Interval availability_1[] = {{30, 150}};
 
-    ConstraintEntry* constraints[HASH_TABLE_SIZE] = {NULL};
-    insertConstraint(constraints, "Deploy to Production", false); // Constraint inactive
-    insertConstraint(constraints, "Write Buggy Code", true);     // Constraint active
-    insertConstraint(constraints, "Implement Feature Y", true);  // Constraint active
+    Interval *availability[] = {availability_0, availability_1}; // Simplified - needs proper handling of multiple intervals
 
-    // Validate the idea
-    MessageNode* messages = validateIdea(idea_sequence, constraints);
+    int preferences_0[] = {0}; // Individual 0 prefers task 0
+    int preferences_1[] = {1}; // Individual 1 prefers task 1
 
-    // Print the validation messages
-    printf("Validation Results:\n");
-    printMessages(messages);
+    int *preferences[] = {preferences_0, preferences_1};
 
-    // Free allocated memory
-    freeLinkedList(idea_sequence);
-    freeHashTable(constraints);
-    freeMessages(messages);
+    ScheduledEvent optimal_schedule[num_tasks];
+    int max_preferences = 0;
+    ScheduledEvent current_schedule[num_tasks];
+
+    printf("This problem requires a more sophisticated backtracking or constraint satisfaction algorithm. The basic structure is outlined.\n");
+
+    // Call the function to find the optimal schedule (implementation needed)
+    // find_optimal_schedule(num_tasks, tasks, num_individuals, individuals, availability, preferences, max_preferences, current_schedule, 0);
+
+    // Output the optimal schedule (implementation needed)
+    // printf("Optimal Schedule with Maximum Preferences: %d\n", max_preferences);
 
     return 0;
 }
