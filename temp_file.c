@@ -1,74 +1,162 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdbool.h>
+#include <string.h>
 
-#define MAX_RESIDENTS 64 // Assuming a maximum of 64 residents
-#define NUM_APARTMENTS 10000 // Assuming a maximum of 10000 apartments
+#define TABLE_SIZE 100  // Adjust size as needed
 
-// Structure to represent the access control system
+// Structure to represent an ingredient
 typedef struct {
-    unsigned long long access_map[NUM_APARTMENTS]; // Using an array as a simple hash table (direct addressing)
-} AccessControlSystem;
+    char* name;
+} Ingredient;
 
-// Function to initialize the access control system
-AccessControlSystem* initAccessControlSystem() {
-    AccessControlSystem* system = (AccessControlSystem*)malloc(sizeof(AccessControlSystem));
-    if (system != NULL) {
-        for (int i = 0; i < NUM_APARTMENTS; i++) {
-            system->access_map[i] = 0;
+// Structure to represent a drink recipe
+typedef struct Recipe {
+    char* drink_name;
+    Ingredient* ingredients;
+    int num_ingredients;
+    struct Recipe* next; // For collision handling (separate chaining)
+} Recipe;
+
+// Hash table structure
+typedef struct {
+    Recipe* table[TABLE_SIZE];
+} HashTable;
+
+// Simple hash function (can be improved)
+unsigned int hash(const char* str) {
+    unsigned int hash = 5381;
+    int c;
+    while ((c = *str++))
+        hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
+    return hash % TABLE_SIZE;
+}
+
+// Function to create a new recipe
+Recipe* createRecipe(const char* drink_name, const char** ingredient_names, int num_ingredients) {
+    Recipe* new_recipe = (Recipe*)malloc(sizeof(Recipe));
+    if (!new_recipe) {
+        perror("Memory allocation failed");
+        exit(EXIT_FAILURE);
+    }
+    new_recipe->drink_name = strdup(drink_name);
+    new_recipe->ingredients = (Ingredient*)malloc(sizeof(Ingredient) * num_ingredients);
+    if (!new_recipe->ingredients) {
+        perror("Memory allocation failed");
+        exit(EXIT_FAILURE);
+    }
+    new_recipe->num_ingredients = num_ingredients;
+    for (int i = 0; i < num_ingredients; i++) {
+        new_recipe->ingredients[i].name = strdup(ingredient_names[i]);
+    }
+    new_recipe->next = NULL;
+    return new_recipe;
+}
+
+// Function to initialize the hash table
+HashTable* createHashTable() {
+    HashTable* ht = (HashTable*)malloc(sizeof(HashTable));
+    if (!ht) {
+        perror("Memory allocation failed");
+        exit(EXIT_FAILURE);
+    }
+    for (int i = 0; i < TABLE_SIZE; i++) {
+        ht->table[i] = NULL;
+    }
+    return ht;
+}
+
+// Function to add a recipe to the hash table
+void addRecipe(HashTable* ht, const char* drink_name, const char** ingredient_names, int num_ingredients) {
+    unsigned int index = hash(drink_name);
+    Recipe* new_recipe = createRecipe(drink_name, ingredient_names, num_ingredients);
+    if (!ht->table[index]) {
+        ht->table[index] = new_recipe;
+    } else {
+        // Handle collision: add to the beginning of the linked list
+        new_recipe->next = ht->table[index];
+        ht->table[index] = new_recipe;
+    }
+}
+
+// Function to get a recipe from the hash table
+Recipe* getRecipe(HashTable* ht, const char* drink_name) {
+    unsigned int index = hash(drink_name);
+    Recipe* current = ht->table[index];
+    while (current) {
+        if (strcmp(current->drink_name, drink_name) == 0) {
+            return current;
         }
+        current = current->next;
     }
-    return system;
+    return NULL; // Recipe not found
 }
 
-// Function to grant access to an apartment for a resident
-bool grantAccess(AccessControlSystem* system, int apartment_number, int resident_id) {
-    if (system == NULL || apartment_number < 0 || apartment_number >= NUM_APARTMENTS || resident_id < 0 || resident_id >= MAX_RESIDENTS) {
-        return false; // Invalid input
+// Function to free the memory allocated for a recipe
+void freeRecipe(Recipe* recipe) {
+    if (recipe) {
+        free(recipe->drink_name);
+        for (int i = 0; i < recipe->num_ingredients; i++) {
+            free(recipe->ingredients[i].name);
+        }
+        free(recipe->ingredients);
+        free(recipe);
     }
-    system->access_map[apartment_number] |= (1ULL << resident_id);
-    return true;
 }
 
-// Function to check if a resident has access to an apartment
-bool hasAccess(AccessControlSystem* system, int apartment_number, int resident_id) {
-    if (system == NULL || apartment_number < 0 || apartment_number >= NUM_APARTMENTS || resident_id < 0 || resident_id >= MAX_RESIDENTS) {
-        return false; // Invalid input
+// Function to free the memory allocated for the hash table
+void freeHashTable(HashTable* ht) {
+    if (ht) {
+        for (int i = 0; i < TABLE_SIZE; i++) {
+            Recipe* current = ht->table[i];
+            while (current) {
+                Recipe* temp = current;
+                current = current->next;
+                freeRecipe(temp);
+            }
+        }
+        free(ht);
     }
-    return (system->access_map[apartment_number] & (1ULL << resident_id)) != 0;
 }
 
 int main() {
-    AccessControlSystem* system = initAccessControlSystem();
-    if (system == NULL) {
-        fprintf(stderr, "Failed to initialize access control system.\n");
-        return 1;
-    }
+    // Initialize the bartender's recipe book (hash table)
+    HashTable* recipe_book = createHashTable();
 
-    // Test case: Grant access to resident 1 for apartment 3602
-    int apartment_3602 = 3602;
-    int resident_1 = 1;
-    if (grantAccess(system, apartment_3602, resident_1)) {
-        printf("Granted access to resident %d for apartment %d.\n", resident_1, apartment_3602);
+    // Add some popular drink recipes
+    const char* martini_ingredients[] = {"Gin", "Dry Vermouth", "Olive or Lemon Twist"};
+    addRecipe(recipe_book, "Martini", martini_ingredients, 3);
+
+    const char* margarita_ingredients[] = {"Tequila", "Lime Juice", "Cointreau"};
+    addRecipe(recipe_book, "Margarita", margarita_ingredients, 3);
+
+    const char* mojito_ingredients[] = {"White Rum", "Sugar", "Lime Juice", "Soda Water", "Mint"};
+    addRecipe(recipe_book, "Mojito", mojito_ingredients, 5);
+
+    // Test customer orders
+    const char* order1 = "Martini";
+    Recipe* recipe1 = getRecipe(recipe_book, order1);
+    if (recipe1) {
+        printf("Bartender knows how to make a %s. Ingredients:\n", recipe1->drink_name);
+        for (int i = 0; i < recipe1->num_ingredients; i++) {
+            printf("- %s\n", recipe1->ingredients[i].name);
+        }
     } else {
-        printf("Failed to grant access.\n");
+        printf("Bartender doesn't know how to make a %s.\n", order1);
     }
 
-    // Test case: Check if resident 1 has access to apartment 3602
-    if (hasAccess(system, apartment_3602, resident_1)) {
-        printf("Resident %d has access to apartment %d.\n", resident_1, apartment_3602);
+    const char* order2 = "Cosmopolitan";
+    Recipe* recipe2 = getRecipe(recipe_book, order2);
+    if (recipe2) {
+        printf("Bartender knows how to make a %s. Ingredients:\n", recipe2->drink_name);
+        for (int i = 0; i < recipe2->num_ingredients; i++) {
+            printf("- %s\n", recipe2->ingredients[i].name);
+        }
     } else {
-        printf("Resident %d does not have access to apartment %d.\n", resident_1, apartment_3602);
+        printf("Bartender doesn't know how to make a %s.\n", order2);
     }
 
-    // Test case: Check if resident 2 has access to apartment 3602 (should not)
-    int resident_2 = 2;
-    if (hasAccess(system, apartment_3602, resident_2)) {
-        printf("Resident %d has access to apartment %d.\n", resident_2, apartment_3602);
-    } else {
-        printf("Resident %d does not have access to apartment %d.\n", resident_2, apartment_3602);
-    }
+    // Clean up memory
+    freeHashTable(recipe_book);
 
-    free(system);
     return 0;
 }
