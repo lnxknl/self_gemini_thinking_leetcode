@@ -1,102 +1,80 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <math.h>
+#include <stdbool.h>
+#include <limits.h> // For INT_MAX
 
-// Function to compare integers for sorting
-int compare(const void *a, const void *b) {
-    return (*(int *)a - *(int *)b);
+// Comparison function for sorting in descending order
+int compareAmounts(const void *a, const void *b) {
+    return *(int *)b - *(int *)a;
 }
 
-// Function to apply a median filter to a pixel
-int median_filter(int **image, int rows, int cols, int r, int c) {
-    int neighborhood[9]; // For a 3x3 neighborhood
-    int k = 0;
+int findMinProvidersRecursive(int target_amount, int current_amount, int num_providers, int provider_amounts[], bool willingness[], bool approached[], int approached_count) {
+    if (current_amount >= target_amount) {
+        return approached_count;
+    }
 
-    for (int i = r - 1; i <= r + 1; i++) {
-        for (int j = c - 1; j <= c + 1; j++) {
-            if (i >= 0 && i < rows && j >= 0 && j < cols) {
-                neighborhood[k++] = image[i][j];
+    if (approached_count == num_providers) {
+        return INT_MAX; // Could not reach the target
+    }
+
+    int min_providers = INT_MAX;
+
+    for (int i = 0; i < num_providers; i++) {
+        if (!approached[i] && willingness[i]) {
+            approached[i] = true;
+            int contribution = (target_amount - current_amount < provider_amounts[i]) ? (target_amount - current_amount) : provider_amounts[i];
+            int result = findMinProvidersRecursive(target_amount, current_amount + contribution, num_providers, provider_amounts, willingness, approached, approached_count + 1);
+            if (result != INT_MAX && result < min_providers) {
+                min_providers = result;
             }
+            approached[i] = false; // Backtrack
+        }
+    }
+    return min_providers;
+}
+
+int solvePettyCashPredicament(int target_amount, int provider_amounts[], int num_providers, bool willingness[], bool police_presence) {
+    // Sort provider amounts in descending order (greedy optimization)
+    int *sorted_amounts = malloc(sizeof(int) * num_providers);
+    for (int i = 0; i < num_providers; i++) {
+        sorted_amounts[i] = provider_amounts[i];
+    }
+    qsort(sorted_amounts, num_providers, sizeof(int), compareAmounts);
+
+    // Adjust willingness based on police presence
+    bool *adjusted_willingness = malloc(sizeof(bool) * num_providers);
+    for (int i = 0; i < num_providers; i++) {
+        adjusted_willingness[i] = willingness[i];
+        if (!willingness[i] && police_presence) {
+            adjusted_willingness[i] = true; // Assuming best-case scenario for willingness
         }
     }
 
-    qsort(neighborhood, k, sizeof(int), compare);
+    bool *approached = calloc(num_providers, sizeof(bool));
+    int min_approaches = findMinProvidersRecursive(target_amount, 0, num_providers, sorted_amounts, adjusted_willingness, approached, 0);
 
-    if (k > 0) {
-        return neighborhood[k / 2];
-    } else {
-        return image[r][c]; // Return original if no neighbors
-    }
+    free(sorted_amounts);
+    free(adjusted_willingness);
+    free(approached);
+
+    return (min_approaches == INT_MAX) ? -1 : min_approaches;
 }
 
-// Function to restore the degraded image using a median filter
-int** restore_image(int **degradedImage, int rows, int cols) {
-    int **restoredImage = (int **)malloc(rows * sizeof(int *));
-    for (int i = 0; i < rows; i++) {
-        restoredImage[i] = (int *)malloc(cols * sizeof(int));
-    }
-
-    for (int i = 0; i < rows; i++) {
-        for (int j = 0; j < cols; j++) {
-            restoredImage[i][j] = median_filter(degradedImage, rows, cols, i, j);
-        }
-    }
-
-    return restoredImage;
-}
-
-// Function to print the image
-void print_image(int **image, int rows, int cols) {
-    for (int i = 0; i < rows; i++) {
-        for (int j = 0; j < cols; j++) {
-            printf("%3d ", image[i][j]);
-        }
-        printf("\n");
-    }
-}
-
+// Test Example
 int main() {
-    // Test Example Input
-    int rows = 5;
-    int cols = 5;
-    int **degradedImage = (int **)malloc(rows * sizeof(int *));
-    for (int i = 0; i < rows; i++) {
-        degradedImage[i] = (int *)malloc(cols * sizeof(int));
-    }
+    int target_amount = 20;
+    int provider_amounts[] = {10, 2,3, 15, 8};
+    int num_providers = sizeof(provider_amounts) / sizeof(provider_amounts[0]);
+    bool willingness[] = {true, false, true, false};
+    bool police_presence = true;
 
-    // Simulate a small degraded image
-    int initial_image[5][5] = {
-        {100, 100, 100, 100, 100},
-        {100, 100, 100, 100, 100},
-        {100, 100, 200, 100, 100},
-        {100, 100, 100, 100, 100},
-        {100, 100, 100, 100, 100}
-    };
+    int result = solvePettyCashPredicament(target_amount, provider_amounts, num_providers, willingness, police_presence);
+    printf("Minimum providers needed: %d\n", result); // Expected output might vary due to police influence interpretation
 
-    // Add some random noise
-    for (int i = 0; i < rows; i++) {
-        for (int j = 0; j < cols; j++) {
-            degradedImage[i][j] = initial_image[i][j] + (rand() % 50 - 25); // Add noise between -25 and 24
-            if (degradedImage[i][j] < 0) degradedImage[i][j] = 0;
-            if (degradedImage[i][j] > 255) degradedImage[i][j] = 255;
-        }
-    }
-
-    printf("Degraded Image:\n");
-    print_image(degradedImage, rows, cols);
-
-    int **restoredImage = restore_image(degradedImage, rows, cols);
-
-    printf("\nRestored Image:\n");
-    print_image(restoredImage, rows, cols);
-
-    // Free allocated memory
-    for (int i = 0; i < rows; i++) {
-        free(degradedImage[i]);
-        free(restoredImage[i]);
-    }
-    free(degradedImage);
-    free(restoredImage);
+    // Test case without police
+    police_presence = false;
+    result = solvePettyCashPredicament(target_amount, provider_amounts, num_providers, willingness, police_presence);
+    printf("Minimum providers needed (no police): %d\n", result);
 
     return 0;
 }
