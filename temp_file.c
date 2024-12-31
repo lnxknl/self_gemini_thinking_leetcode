@@ -1,160 +1,87 @@
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
+#include <stdlib.h>
 
-// Structure for a hash table node
-typedef struct Node {
-    char* key;
-    int count;
-    struct Node* next;
-} Node;
+bool isInterleave(const char *s1, const char *s2, const char *s3) {
+    int len1 = strlen(s1);
+    int len2 = strlen(s2);
+    int len3 = strlen(s3);
 
-// Hash table structure
-typedef struct HashTable {
-    int size;
-    Node** table;
-} HashTable;
-
-// Hash function (simple polynomial rolling hash)
-unsigned int hash(const char* str, int size) {
-    unsigned int hashValue = 5381;
-    int c;
-    while ((c = *str++))
-        hashValue = ((hashValue << 5) + hashValue) + c; /* hash * 33 + c */
-    return hashValue % size;
-}
-
-// Create a new hash table
-HashTable* createHashTable(int size) {
-    HashTable* ht = (HashTable*)malloc(sizeof(HashTable));
-    if (ht == NULL) {
-        perror("Failed to allocate memory for hash table");
-        exit(EXIT_FAILURE);
-    }
-    ht->size = size;
-    ht->table = (Node**)calloc(ht->size, sizeof(Node*));
-    if (ht->table == NULL) {
-        perror("Failed to allocate memory for hash table buckets");
-        exit(EXIT_FAILURE);
-    }
-    return ht;
-}
-
-// Insert or update a key in the hash table
-void insertOrUpdate(HashTable* ht, const char* key) {
-    unsigned int index = hash(key, ht->size);
-    Node* current = ht->table[index];
-    while (current != NULL) {
-        if (strcmp(current->key, key) == 0) {
-            current->count++;
-            return;
-        }
-        current = current->next;
-    }
-    Node* newNode = (Node*)malloc(sizeof(Node));
-    if (newNode == NULL) {
-        perror("Failed to allocate memory for hash table node");
-        exit(EXIT_FAILURE);
-    }
-    newNode->key = strdup(key);
-    newNode->count = 1;
-    newNode->next = ht->table[index];
-    ht->table[index] = newNode;
-}
-
-// Get the count of a key in the hash table
-int getCount(HashTable* ht, const char* key) {
-    unsigned int index = hash(key, ht->size);
-    Node* current = ht->table[index];
-    while (current != NULL) {
-        if (strcmp(current->key, key) == 0) {
-            return current->count;
-        }
-        current = current->next;
-    }
-    return 0;
-}
-
-// Function to calculate the minimum outfit changes
-int minOutfitChanges(char* initialOutfit[], int initialSize, char* finalOutfit[], int finalSize) {
-    HashTable* initialCounts = createHashTable(initialSize + finalSize); // Heuristic size
-    HashTable* finalCounts = createHashTable(initialSize + finalSize);
-
-    // Populate hash tables
-    for (int i = 0; i < initialSize; i++) {
-        insertOrUpdate(initialCounts, initialOutfit[i]);
-    }
-    for (int i = 0; i < finalSize; i++) {
-        insertOrUpdate(finalCounts, finalOutfit[i]);
+    if (len1 + len2 != len3) {
+        return false;
     }
 
-    int changes = 0;
-    int keptItems = 0;
+    bool dp[len1 + 1][len2 + 1];
+    memset(dp, false, sizeof(dp));
 
-    // Iterate through the initial outfit counts
-    for (int i = 0; i < initialCounts->size; i++) {
-        Node* current = initialCounts->table[i];
-        while (current != NULL) {
-            int initialCount = current->count;
-            int finalCount = getCount(finalCounts, current->key);
-            keptItems += (initialCount < finalCount ? initialCount : finalCount); // Number of items that can be kept
-            current = current->next;
+    dp[0][0] = true;
+
+    // Initialize first column
+    for (int i = 1; i <= len1; i++) {
+        if (s1[i - 1] == s3[i - 1]) {
+            dp[i][0] = dp[i - 1][0];
         }
     }
 
-    changes = initialSize + finalSize - 2 * keptItems;
-
-    // Free allocated memory (important!)
-    for (int i = 0; i < initialCounts->size; i++) {
-        Node* current = initialCounts->table[i];
-        while (current != NULL) {
-            Node* temp = current;
-            free(temp->key);
-            current = current->next;
-            free(temp);
+    // Initialize first row
+    for (int j = 1; j <= len2; j++) {
+        if (s2[j - 1] == s3[j - 1]) {
+            dp[0][j] = dp[0][j - 1];
         }
     }
-    free(initialCounts->table);
-    free(initialCounts);
 
-    for (int i = 0; i < finalCounts->size; i++) {
-        Node* current = finalCounts->table[i];
-        while (current != NULL) {
-            Node* temp = current;
-            free(temp->key);
-            current = current->next;
-            free(temp);
+    // Fill the dp table
+    for (int i = 1; i <= len1; i++) {
+        for (int j = 1; j <= len2; j++) {
+            if (s1[i - 1] == s3[i + j - 1] && dp[i - 1][j]) {
+                dp[i][j] = true;
+            }
+            if (s2[j - 1] == s3[i + j - 1] && dp[i][j - 1]) {
+                dp[i][j] = true;
+            }
         }
     }
-    free(finalCounts->table);
-    free(finalCounts);
 
-    return changes;
+    return dp[len1][len2];
 }
 
 int main() {
-    char* initialOutfit[] = {"red_jacket", "white_shirt", "beige_pants", "black_glasses"};
-    int initialSize = sizeof(initialOutfit) / sizeof(initialOutfit[0]);
-    char* finalOutfit[] = {"white_sweater", "beige_pants", "brown_glasses"};
-    int finalSize = sizeof(finalOutfit) / sizeof(finalOutfit[0]);
+    // Test cases
+    char *s1_1 = "abc";
+    char *s2_1 = "de";
+    char *s3_1 = "adbec";
+    printf("isInterleave(\"%s\", \"%s\", \"%s\") = %s\n", s1_1, s2_1, s3_1, isInterleave(s1_1, s2_1, s3_1) ? "true" : "false");
 
-    int changes = minOutfitChanges(initialOutfit, initialSize, finalOutfit, finalSize);
-    printf("Minimum outfit changes: %d\n", changes); // Expected output: 4
+    char *s1_2 = "abc";
+    char *s2_2 = "de";
+    char *s3_2 = "abdec";
+    printf("isInterleave(\"%s\", \"%s\", \"%s\") = %s\n", s1_2, s2_2, s3_2, isInterleave(s1_2, s2_2, s3_2) ? "true" : "false");
 
-    char* initialOutfit2[] = {"blue_shirt", "black_pants"};
-    int initialSize2 = sizeof(initialOutfit2) / sizeof(initialOutfit2[0]);
-    char* finalOutfit2[] = {"blue_shirt", "black_pants"};
-    int finalSize2 = sizeof(finalOutfit2) / sizeof(finalOutfit2[0]);
-    changes = minOutfitChanges(initialOutfit2, initialSize2, finalOutfit2, finalSize2);
-    printf("Minimum outfit changes: %d\n", changes); // Expected output: 0
+    char *s1_3 = "abc";
+    char *s2_3 = "de";
+    char *s3_3 = "acebd";
+    printf("isInterleave(\"%s\", \"%s\", \"%s\") = %s\n", s1_3, s2_3, s3_3, isInterleave(s1_3, s2_3, s3_3) ? "true" : "false");
 
-    char* initialOutfit3[] = {"red_tshirt"};
-    int initialSize3 = sizeof(initialOutfit3) / sizeof(initialOutfit3[0]);
-    char* finalOutfit3[] = {"blue_tshirt"};
-    int finalSize3 = sizeof(finalOutfit3) / sizeof(finalOutfit3[0]);
-    changes = minOutfitChanges(initialOutfit3, initialSize3, finalOutfit3, finalSize3);
-    printf("Minimum outfit changes: %d\n", changes); // Expected output: 1
+    char *s1_4 = "abc";
+    char *s2_4 = "de";
+    char *s3_4 = "abxde";
+    printf("isInterleave(\"%s\", \"%s\", \"%s\") = %s\n", s1_4, s2_4, s3_4, isInterleave(s1_4, s2_4, s3_4) ? "true" : "false");
+
+    char *s1_5 = "";
+    char *s2_5 = "";
+    char *s3_5 = "";
+    printf("isInterleave(\"%s\", \"%s\", \"%s\") = %s\n", s1_5, s2_5, s3_5, isInterleave(s1_5, s2_5, s3_5) ? "true" : "false");
+
+    char *s1_6 = "aabcc";
+    char *s2_6 = "dbbca";
+    char *s3_6 = "aadbbcbcac";
+    printf("isInterleave(\"%s\", \"%s\", \"%s\") = %s\n", s1_6, s2_6, s3_6, isInterleave(s1_6, s2_6, s3_6) ? "true" : "false");
+
+    char *s1_7 = "aabcc";
+    char *s2_7 = "dbbca";
+    char *s3_7 = "aadbbbaccc";
+    printf("isInterleave(\"%s\", \"%s\", \"%s\") = %s\n", s1_7, s2_7, s3_7, isInterleave(s1_7, s2_7, s3_7) ? "true" : "false");
 
     return 0;
 }
