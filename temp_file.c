@@ -1,92 +1,160 @@
 #include <stdio.h>
-#include <string.h>
-#include <stdbool.h>
 #include <stdlib.h>
+#include <stdbool.h>
 
-// A simple hash table implementation using an array of linked lists
-#define HASH_TABLE_SIZE 101 // A prime number for better distribution
+// Structure for a Knowledge Node
+typedef struct KnowledgeNode {
+    int id;
+    int* prerequisites;
+    int numPrerequisites;
+} KnowledgeNode;
 
-typedef struct HashNode {
-    char *password;
-    struct HashNode *next;
-} HashNode;
+// Structure for a Hash Table entry
+typedef struct HashEntry {
+    int key;
+    KnowledgeNode* value;
+    struct HashEntry* next;
+} HashEntry;
 
-HashNode *hash_table[HASH_TABLE_SIZE];
+// Hash Table structure
+typedef struct HashTable {
+    int size;
+    HashEntry** buckets;
+} HashTable;
 
 // Simple hash function
-unsigned int hash(const char *str) {
-    unsigned int hash = 5381;
-    int c;
-    while ((c = *str++))
-        hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
-    return hash % HASH_TABLE_SIZE;
+unsigned int hash(int key, int size) {
+    return key % size;
 }
 
-// Insert a password into the hash table
-void insert_password(const char *password) {
-    unsigned int index = hash(password);
-    HashNode *new_node = (HashNode *)malloc(sizeof(HashNode));
-    if (!new_node) {
-        perror("Memory allocation failed");
-        exit(EXIT_FAILURE);
-    }
-    new_node->password = strdup(password); // Allocate memory for the password
-    new_node->next = hash_table[index];
-    hash_table[index] = new_node;
+// Function to create a new Hash Table
+HashTable* createHashTable(int size) {
+    HashTable* ht = (HashTable*)malloc(sizeof(HashTable));
+    ht->size = size;
+    ht->buckets = (HashEntry**)calloc(size, sizeof(HashEntry*));
+    return ht;
 }
 
-// Check if a password exists in the hash table
-bool is_weak_password(const char *potential_password) {
-    unsigned int index = hash(potential_password);
-    HashNode *current = hash_table[index];
-    while (current) {
-        if (strcmp(current->password, potential_password) == 0) {
-            return true;
+// Function to insert a key-value pair into the Hash Table
+void insert(HashTable* ht, int key, KnowledgeNode* value) {
+    unsigned int index = hash(key, ht->size);
+    HashEntry* entry = (HashEntry*)malloc(sizeof(HashEntry));
+    entry->key = key;
+    entry->value = value;
+    entry->next = ht->buckets[index];
+    ht->buckets[index] = entry;
+}
+
+// Function to search for a value by key in the Hash Table
+KnowledgeNode* search(HashTable* ht, int key) {
+    unsigned int index = hash(key, ht->size);
+    HashEntry* current = ht->buckets[index];
+    while (current != NULL) {
+        if (current->key == key) {
+            return current->value;
         }
         current = current->next;
     }
-    return false;
+    return NULL;
 }
 
-// Function to free the hash table memory
-void free_hash_table() {
-    for (int i = 0; i < HASH_TABLE_SIZE; i++) {
-        HashNode *current = hash_table[i];
-        while (current) {
-            HashNode *temp = current;
-            free(temp->password);
-            current = current->next;
-            free(temp);
-        }
-        hash_table[i] = NULL;
+// DFS function to check if knowledge can be understood
+int canUnderstand(int nodeId, HashTable* graph, HashTable* memo, HashTable* visited) {
+    if (search(memo, nodeId) != NULL) {
+        return 1; // Already computed
     }
+
+    if (search(visited, nodeId) != NULL) {
+        return 0; // Cycle detected
+    }
+
+    KnowledgeNode* node = search(graph, nodeId);
+    if (node == NULL) {
+        return 0; // Knowledge not found
+    }
+
+    // Mark as visiting
+    HashEntry* visited_entry = (HashEntry*)malloc(sizeof(HashEntry));
+    visited_entry->key = nodeId;
+    visited_entry->value = NULL; // Value not important for visited
+    visited_entry->next = visited->buckets[hash(nodeId, visited->size)];
+    visited->buckets[hash(nodeId, visited->size)] = visited_entry;
+
+    for (int i = 0; i < node->numPrerequisites; i++) {
+        if (!canUnderstand(node->prerequisites[i], graph, memo, visited)) {
+            return 0;
+        }
+    }
+
+    // Mark as understood in memo
+    HashEntry* memo_entry = (HashEntry*)malloc(sizeof(HashEntry));
+    memo_entry->key = nodeId;
+    memo_entry->value = NULL; // Value not important for memo, presence indicates understood
+    memo_entry->next = memo->buckets[hash(nodeId, memo->size)];
+    memo->buckets[hash(nodeId, memo->size)] = memo_entry;
+
+    // Remove from visited
+    HashEntry* prev = NULL;
+    HashEntry* curr = visited->buckets[hash(nodeId, visited->size)];
+    while (curr != NULL) {
+        if (curr->key == nodeId) {
+            if (prev == NULL) {
+                visited->buckets[hash(nodeId, visited->size)] = curr->next;
+            } else {
+                prev->next = curr->next;
+            }
+            free(curr);
+            break;
+        }
+        prev = curr;
+        curr = curr->next;
+    }
+
+    return 1;
+}
+
+int canUnderstandKnowledge(int targetId, KnowledgeNode* nodes, int numNodes) {
+    HashTable* graph = createHashTable(numNodes * 2); // Size for the graph
+    for (int i = 0; i < numNodes; i++) {
+        insert(graph, nodes[i].id, &nodes[i]);
+    }
+
+    HashTable* memo = createHashTable(numNodes * 2); // Memoization table
+    HashTable* visited = createHashTable(numNodes * 2); // Cycle detection
+
+    return canUnderstand(targetId, graph, memo, visited);
 }
 
 int main() {
-    // Initialize the hash table
-    for (int i = 0; i < HASH_TABLE_SIZE; i++) {
-        hash_table[i] = NULL;
+    // Example Input
+    KnowledgeNode nodes[] = {
+        {1, NULL, 0},
+        {2, (int[]){1}, 1},
+        {3, (int[]){1, 2}, 2},
+        {4, (int[]){3, 5}, 2},
+        {5, NULL, 0}
+    };
+    int numNodes = sizeof(nodes) / sizeof(nodes[0]);
+
+    int targetId = 4;
+    if (canUnderstandKnowledge(targetId, nodes, numNodes)) {
+        printf("It is possible to understand knowledge with ID %d\n", targetId);
+    } else {
+        printf("It is NOT possible to understand knowledge with ID %d\n", targetId);
     }
 
-    // Example list of weak passwords
-    char *weak_passwords[] = {"password", "123456", "qwerty", "admin", "111111"};
-    int num_weak_passwords = sizeof(weak_passwords) / sizeof(weak_passwords[0]);
-
-    // Populate the hash table with weak passwords
-    for (int i = 0; i < num_weak_passwords; i++) {
-        insert_password(weak_passwords[i]);
+    // Example with a cycle
+    KnowledgeNode nodes_cycle[] = {
+        {1, (int[]){2}, 1},
+        {2, (int[]){1}, 1}
+    };
+    int numNodes_cycle = sizeof(nodes_cycle) / sizeof(nodes_cycle[0]);
+    int targetId_cycle = 1;
+    if (canUnderstandKnowledge(targetId_cycle, nodes_cycle, numNodes_cycle)) {
+        printf("It is possible to understand knowledge with ID %d\n", targetId_cycle);
+    } else {
+        printf("It is NOT possible to understand knowledge with ID %d (cycle)\n", targetId_cycle);
     }
-
-    // Test cases
-    char *test_passwords[] = {"mysecurepassword", "password", "qwertyuiop", "123456"};
-    int num_test_passwords = sizeof(test_passwords) / sizeof(test_passwords[0]);
-
-    for (int i = 0; i < num_test_passwords; i++) {
-        printf("Checking if '%s' is a weak password: %s\n", test_passwords[i], is_weak_password(test_passwords[i]) ? "true" : "false");
-    }
-
-    // Free the allocated memory
-    free_hash_table();
 
     return 0;
 }
