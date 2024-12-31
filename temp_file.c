@@ -1,94 +1,114 @@
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
 
-// Structure to represent a suspect
+// Struct definitions
+typedef struct {
+    char license_plate[20];
+    int owner_id;
+    bool is_stolen;
+    int outstanding_tickets;
+} VehicleRecord;
+
 typedef struct {
     int id;
-    char clothing_color[20];
-    char gender[10];
-    char hair_color[20];
-    int approximate_age;
-} Suspect;
+    char name[50];
+    char driver_license_number[20];
+    bool is_license_suspended;
+    bool outstanding_arrest_warrants;
+} IndividualRecord;
 
-// Structure to represent a witness report
-typedef struct {
-    char clothing_color[20];
-    char gender[10];
-    char hair_color[20];
-    int approximate_age;
-    bool has_clothing_color;
-    bool has_gender;
-    bool has_hair_color;
-    bool has_approximate_age;
-} WitnessReport;
-
-// Function to calculate a match score between a suspect and a witness report
-int calculate_match_score(const Suspect *suspect, const WitnessReport *report) {
-    int score = 0;
-
-    if (report->has_clothing_color && strcmp(suspect->clothing_color, report->clothing_color) == 0) {
-        score++;
+// Function to find a vehicle record by license plate
+VehicleRecord* findVehicle(const char* license_plate, VehicleRecord* vehicle_records[], int num_vehicles) {
+    for (int i = 0; i < num_vehicles; i++) {
+        if (strcmp(vehicle_records[i]->license_plate, license_plate) == 0) {
+            return vehicle_records[i];
+        }
     }
-    if (report->has_gender && strcmp(suspect->gender, report->gender) == 0) {
-        score++;
-    }
-    if (report->has_hair_color && strcmp(suspect->hair_color, report->hair_color) == 0) {
-        score++;
-    }
-    if (report->has_approximate_age && suspect->approximate_age == report->approximate_age) {
-        score++;
-    }
-    return score;
+    return NULL;
 }
 
-// Function to identify the most likely culprit
-int identify_culprit(const Suspect suspects[], int num_suspects, const WitnessReport reports[], int num_reports) {
-    int best_match_id = -1;
-    int max_score = -1;
-
-    for (int i = 0; i < num_suspects; i++) {
-        int current_score = 0;
-        for (int j = 0; j < num_reports; j++) {
-            current_score += calculate_match_score(&suspects[i], &reports[j]);
-        }
-
-        if (current_score > max_score) {
-            max_score = current_score;
-            best_match_id = suspects[i].id;
-        } else if (current_score == max_score && max_score != -1) {
-            // Handle ties - for simplicity, we'll return -1 if there's a tie
-            return -1;
+// Function to find an individual record by ID
+IndividualRecord* findIndividual(int id, IndividualRecord* individual_records[], int num_individuals) {
+    for (int i = 0; i < num_individuals; i++) {
+        if (individual_records[i]->id == id) {
+            return individual_records[i];
         }
     }
+    return NULL;
+}
 
-    return best_match_id;
+// Main function to determine the action
+const char* determineAction(const char* license_plate, VehicleRecord* vehicle_records[], int num_vehicles, IndividualRecord* individual_records[], int num_individuals) {
+    VehicleRecord* vehicle = findVehicle(license_plate, vehicle_records, num_vehicles);
+
+    if (vehicle == NULL) {
+        return "Error: Vehicle not found in database.";
+    }
+
+    if (vehicle->is_stolen) {
+        return "Arrest Driver, Impound Vehicle";
+    }
+
+    IndividualRecord* owner = findIndividual(vehicle->owner_id, individual_records, num_individuals);
+
+    if (owner == NULL) {
+        return "Error: Owner information not found.";
+    }
+
+    if (owner->outstanding_arrest_warrants) {
+        return "Arrest Driver";
+    }
+
+    if (owner->is_license_suspended) {
+        return "Issue Citation: Driving with Suspended License";
+    }
+
+    if (vehicle->outstanding_tickets > 5) {
+        return "Issue Citation: Excessive Unpaid Tickets";
+    } else if (vehicle->outstanding_tickets > 0) {
+        return "Warn Driver about Unpaid Tickets";
+    }
+
+    return "Routine Stop, No Action Required";
 }
 
 int main() {
-    // Example Input
-    Suspect suspects[] = {
-        {1, "blue", "male", "black", 30},
-        {2, "white", "male", "brown", 25},
-        {3, "red", "female", "blonde", 35}
-    };
-    int num_suspects = sizeof(suspects) / sizeof(suspects[0]);
+    // Test Input
+    VehicleRecord vehicle1 = {"ABC-123", 101, false, 2};
+    VehicleRecord vehicle2 = {"XYZ-789", 102, true, 0};
+    VehicleRecord vehicle3 = {"LMN-456", 103, false, 7};
 
-    WitnessReport reports[] = {
-        {"blue", "male", "", 0, true, true, false, false}, // Witness saw blue shirt and male
-        {"", "", "black", 30, false, false, true, true}, // Witness saw black hair and age 30
-        {"blue", "", "", 0, true, false, false, false}  // Witness saw blue shirt
-    };
-    int num_reports = sizeof(reports) / sizeof(reports[0]);
+    IndividualRecord individual1 = {101, "John Doe", "DL12345", false, false};
+    IndividualRecord individual2 = {102, "Jane Smith", "DL67890", false, true};
+    IndividualRecord individual3 = {103, "Peter Jones", "DL11111", true, false};
 
-    int culprit_id = identify_culprit(suspects, num_suspects, reports, num_reports);
+    VehicleRecord* vehicle_records[] = {&vehicle1, &vehicle2, &vehicle3};
+    IndividualRecord* individual_records[] = {&individual1, &individual2, &individual3};
+    int num_vehicles = 3;
+    int num_individuals = 3;
 
-    if (culprit_id != -1) {
-        printf("Most likely culprit ID: %d\n", culprit_id);
-    } else {
-        printf("Could not identify a single culprit.\n");
-    }
+    // Test Cases
+    printf("License Plate ABC-123: %s\n", determineAction("ABC-123", vehicle_records, num_vehicles, individual_records, num_individuals)); // Expected: Warn Driver about Unpaid Tickets
+    printf("License Plate XYZ-789: %s\n", determineAction("XYZ-789", vehicle_records, num_vehicles, individual_records, num_individuals)); // Expected: Arrest Driver, Impound Vehicle
+    printf("License Plate LMN-456: %s\n", determineAction("LMN-456", vehicle_records, num_vehicles, individual_records, num_individuals)); // Expected: Issue Citation: Excessive Unpaid Tickets
+
+    // Add a case for suspended license
+    VehicleRecord vehicle4 = {"PQR-999", 103, false, 0};
+    VehicleRecord* vehicle_records2[] = {&vehicle1, &vehicle2, &vehicle3, &vehicle4};
+    printf("License Plate PQR-999: %s\n", determineAction("PQR-999", vehicle_records2, 4, individual_records, num_individuals)); // Expected: Issue Citation: Driving with Suspended License
+
+    // Add a case for arrest warrant
+    VehicleRecord vehicle5 = {"STU-000", 102, false, 1};
+    VehicleRecord* vehicle_records3[] = {&vehicle1, &vehicle2, &vehicle3, &vehicle4, &vehicle5};
+    printf("License Plate STU-000: %s\n", determineAction("STU-000", vehicle_records3, 5, individual_records, num_individuals)); // Expected: Arrest Driver
+
+    // Add a case for routine stop
+    VehicleRecord vehicle6 = {"VVV-111", 104, false, 0};
+    IndividualRecord individual4 = {104, "Sarah Blue", "DL22222", false, false};
+    VehicleRecord* vehicle_records4[] = {&vehicle1, &vehicle2, &vehicle3, &vehicle4, &vehicle5, &vehicle6};
+    IndividualRecord* individual_records2[] = {&individual1, &individual2, &individual3, &individual4};
+    printf("License Plate VVV-111: %s\n", determineAction("VVV-111", vehicle_records4, 6, individual_records2, 4)); // Expected: Routine Stop, No Action Required
 
     return 0;
 }
