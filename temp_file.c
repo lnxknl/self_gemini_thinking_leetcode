@@ -1,58 +1,96 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
-// Comparison function for qsort (ascending order)
-int compareHunger(const void *a, const void *b) {
-    return (*(int *)a - *(int *)b);
+// Structure to represent attractiveness factors
+typedef struct {
+    int appearance;
+    int personality;
+    int skills;
+} AttractivenessFactors;
+
+// Structure to represent a person
+typedef struct {
+    int id;
+    char name[50];
+    AttractivenessFactors factors;
+    int overall_score;
+} Person;
+
+// Comparison function for qsort (descending order)
+int comparePersons(const void *a, const void *b) {
+    Person *personA = (Person *)a;
+    Person *personB = (Person *)b;
+    return personB->overall_score - personA->overall_score;
 }
 
-int maxSatisfiedResidents(int hunger[], int n, int food_items) {
-    // 1. Sort the hunger array
-    qsort(hunger, n, sizeof(int), compareHunger);
-
-    int satisfied_count = 0;
-
-    // 2. Iterate and allocate food
-    for (int i = 0; i < n; i++) {
-        if (food_items >= hunger[i]) {
-            food_items -= hunger[i];
-            satisfied_count++;
-        } else {
-            break; // No more residents can be fully satisfied
-        }
-    }
-
-    return satisfied_count;
+// Function to calculate overall score
+void calculateOverallScore(Person *person) {
+    person->overall_score = person->factors.appearance + person->factors.personality + person->factors.skills;
 }
 
 int main() {
-    // Test Example 1
-    int hunger1[] = {2, 1, 3};
-    int n1 = sizeof(hunger1) / sizeof(hunger1[0]);
-    int food_items1 = 4;
-    int result1 = maxSatisfiedResidents(hunger1, n1, food_items1);
-    printf("Test Case 1: Max satisfied residents = %d\n", result1); // Expected Output: 2
+    // Sample Input
+    Person people[] = {
+        {1, "Alice", {8, 7, 6}, 0},
+        {2, "Bob", {6, 9, 8}, 0},
+        {3, "Cathy", {7, 6, 9}, 0},
+        {4, "David", {5, 5, 5}, 0}
+    };
+    int numPeople = sizeof(people) / sizeof(people[0]);
+    int targetId = 4; // Let's say David is the target person
 
-    // Test Example 2
-    int hunger2[] = {5, 2, 3, 1, 4};
-    int n2 = sizeof(hunger2) / sizeof(hunger2[0]);
-    int food_items2 = 8;
-    int result2 = maxSatisfiedResidents(hunger2, n2, food_items2);
-    printf("Test Case 2: Max satisfied residents = %d\n", result2); // Expected Output: 3
+    // Calculate overall scores
+    for (int i = 0; i < numPeople; i++) {
+        calculateOverallScore(&people[i]);
+    }
 
-    // Test Example 3 (Edge Case: Not enough food for anyone)
-    int hunger3[] = {3, 4, 5};
-    int n3 = sizeof(hunger3) / sizeof(hunger3[0]);
-    int food_items3 = 2;
-    int result3 = maxSatisfiedResidents(hunger3, n3, food_items3);
-    printf("Test Case 3: Max satisfied residents = %d\n", result3); // Expected Output: 0
+    // Sort the people based on overall score
+    qsort(people, numPeople, sizeof(Person), comparePersons);
 
-    // Test Example 4 (Edge Case: Enough food for everyone)
-    int hunger4[] = {1, 1, 1};
-    int n4 = sizeof(hunger4) / sizeof(hunger4[0]);
-    int food_items4 = 3;
-    int result4 = maxSatisfiedResidents(hunger4, n4, food_items4);
-    printf("Test Case 4: Max satisfied residents = %d\n", result4); // Expected Output: 3
+    // Find the target person and their rank
+    int targetRank = -1;
+    Person *targetPerson = NULL;
+    for (int i = 0; i < numPeople; i++) {
+        if (people[i].id == targetId) {
+            targetRank = i + 1;
+            targetPerson = &people[i];
+            break;
+        }
+    }
+
+    if (targetRank != -1) {
+        printf("Target Person: %s (ID: %d)\n", targetPerson->name, targetPerson->id);
+        printf("Rank: %d\n", targetRank);
+
+        printf("Areas for Improvement:\n");
+        double threshold = 0.2; // Define a threshold for significant difference
+
+        for (int i = 0; i < targetRank - 1; i++) { // Iterate through people ranked higher
+            if ((double)(people[i].factors.appearance - targetPerson->factors.appearance) / people[i].factors.appearance > threshold) {
+                printf("- Appearance\n");
+                break; // Print only once per factor
+            }
+        }
+         for (int i = 0; i < targetRank - 1; i++) { // Iterate through people ranked higher
+            if ((double)(people[i].factors.personality - targetPerson->factors.personality) / people[i].factors.personality > threshold) {
+                printf("- Personality\n");
+                break;
+            }
+        }
+        for (int i = 0; i < targetRank - 1; i++) { // Iterate through people ranked higher
+            if ((double)(people[i].factors.skills - targetPerson->factors.skills) / people[i].factors.skills > threshold) {
+                printf("- Skills\n");
+                break;
+            }
+        }
+
+        if (targetRank == numPeople) {
+            printf("No areas for improvement compared to those ranked higher (already the lowest ranked).\n");
+        }
+    } else {
+        printf("Target person not found.\n");
+    }
 
     return 0;
 }
