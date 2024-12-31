@@ -1,119 +1,74 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 
-// Structure to represent a node in the adjacency list
-struct Node {
-    int dest;
-    struct Node* next;
-};
+#define MAX_RESIDENTS 64 // Assuming a maximum of 64 residents
+#define NUM_APARTMENTS 10000 // Assuming a maximum of 10000 apartments
 
-// Function to create a new node
-struct Node* newNode(int dest) {
-    struct Node* node = (struct Node*)malloc(sizeof(struct Node));
-    node->dest = dest;
-    node->next = NULL;
-    return node;
+// Structure to represent the access control system
+typedef struct {
+    unsigned long long access_map[NUM_APARTMENTS]; // Using an array as a simple hash table (direct addressing)
+} AccessControlSystem;
+
+// Function to initialize the access control system
+AccessControlSystem* initAccessControlSystem() {
+    AccessControlSystem* system = (AccessControlSystem*)malloc(sizeof(AccessControlSystem));
+    if (system != NULL) {
+        for (int i = 0; i < NUM_APARTMENTS; i++) {
+            system->access_map[i] = 0;
+        }
+    }
+    return system;
 }
 
-// Function to perform topological sort
-int* findTaskOrder(int numTasks, int** dependencies, int dependenciesSize, int* dependenciesColSize,
-                    int** orderingConstraints, int orderingConstraintsSize, int* orderingConstraintsColSize) {
-    struct Node** graph = (struct Node**)malloc(numTasks * sizeof(struct Node*));
-    int* inDegree = (int*)calloc(numTasks, sizeof(int));
-    int* result = (int*)malloc(numTasks * sizeof(int));
-    int resultIndex = 0;
-    int queue[numTasks];
-    int front = 0, rear = 0;
-
-    // Initialize the graph
-    for (int i = 0; i < numTasks; i++) {
-        graph[i] = NULL;
+// Function to grant access to an apartment for a resident
+bool grantAccess(AccessControlSystem* system, int apartment_number, int resident_id) {
+    if (system == NULL || apartment_number < 0 || apartment_number >= NUM_APARTMENTS || resident_id < 0 || resident_id >= MAX_RESIDENTS) {
+        return false; // Invalid input
     }
+    system->access_map[apartment_number] |= (1ULL << resident_id);
+    return true;
+}
 
-    // Build the dependency graph and calculate in-degrees
-    for (int i = 0; i < dependenciesSize; i++) {
-        int src = dependencies[i][0];
-        int dest = dependencies[i][1];
-        struct Node* node = newNode(dest);
-        node->next = graph[src];
-        graph[src] = node;
-        inDegree[dest]++;
+// Function to check if a resident has access to an apartment
+bool hasAccess(AccessControlSystem* system, int apartment_number, int resident_id) {
+    if (system == NULL || apartment_number < 0 || apartment_number >= NUM_APARTMENTS || resident_id < 0 || resident_id >= MAX_RESIDENTS) {
+        return false; // Invalid input
     }
-
-    // Build the ordering constraint graph and update in-degrees
-    for (int i = 0; i < orderingConstraintsSize; i++) {
-        int before = orderingConstraints[i][0];
-        int after = orderingConstraints[i][1];
-        struct Node* node = newNode(after);
-        node->next = graph[before];
-        graph[before] = node;
-        inDegree[after]++;
-    }
-
-    // Initialize the queue with tasks having an in-degree of 0
-    for (int i = 0; i < numTasks; i++) {
-        if (inDegree[i] == 0) {
-            queue[rear++] = i;
-        }
-    }
-
-    // Perform topological sort
-    while (front < rear) {
-        int currentTask = queue[front++];
-        result[resultIndex++] = currentTask;
-
-        struct Node* temp = graph[currentTask];
-        while (temp != NULL) {
-            inDegree[temp->dest]--;
-            if (inDegree[temp->dest] == 0) {
-                queue[rear++] = temp->dest;
-            }
-            temp = temp->next;
-        }
-    }
-
-    // Check for cycles
-    if (resultIndex != numTasks) {
-        free(result);
-        free(graph);
-        free(inDegree);
-        return NULL; // Indicate no valid order
-    }
-
-    free(graph);
-    free(inDegree);
-    return result;
+    return (system->access_map[apartment_number] & (1ULL << resident_id)) != 0;
 }
 
 int main() {
-    int numTasks = 4;
-    int dependencies_data[][2] = {{0, 1}, {1, 3}};
-    int* dependencies[2];
-    dependencies[0] = dependencies_data[0];
-    dependencies[1] = dependencies_data[1];
-    int dependenciesSize = 2;
-    int dependenciesColSize[] = {2, 2};
-
-    int orderingConstraints_data[][2] = {{2, 3}, {0, 2}};
-    int* orderingConstraints[2];
-    orderingConstraints[0] = orderingConstraints_data[0];
-    orderingConstraints[1] = orderingConstraints_data[1];
-    int orderingConstraintsSize = 2;
-    int orderingConstraintsColSize[] = {2, 2};
-
-    int* taskOrder = findTaskOrder(numTasks, dependencies, dependenciesSize, dependenciesColSize,
-                                    orderingConstraints, orderingConstraintsSize, orderingConstraintsColSize);
-
-    if (taskOrder != NULL) {
-        printf("Valid Task Order: ");
-        for (int i = 0; i < numTasks; i++) {
-            printf("%d ", taskOrder[i]);
-        }
-        printf("\n");
-        free(taskOrder);
-    } else {
-        printf("No valid task order exists.\n");
+    AccessControlSystem* system = initAccessControlSystem();
+    if (system == NULL) {
+        fprintf(stderr, "Failed to initialize access control system.\n");
+        return 1;
     }
 
+    // Test case: Grant access to resident 1 for apartment 3602
+    int apartment_3602 = 3602;
+    int resident_1 = 1;
+    if (grantAccess(system, apartment_3602, resident_1)) {
+        printf("Granted access to resident %d for apartment %d.\n", resident_1, apartment_3602);
+    } else {
+        printf("Failed to grant access.\n");
+    }
+
+    // Test case: Check if resident 1 has access to apartment 3602
+    if (hasAccess(system, apartment_3602, resident_1)) {
+        printf("Resident %d has access to apartment %d.\n", resident_1, apartment_3602);
+    } else {
+        printf("Resident %d does not have access to apartment %d.\n", resident_1, apartment_3602);
+    }
+
+    // Test case: Check if resident 2 has access to apartment 3602 (should not)
+    int resident_2 = 2;
+    if (hasAccess(system, apartment_3602, resident_2)) {
+        printf("Resident %d has access to apartment %d.\n", resident_2, apartment_3602);
+    } else {
+        printf("Resident %d does not have access to apartment %d.\n", resident_2, apartment_3602);
+    }
+
+    free(system);
     return 0;
 }
