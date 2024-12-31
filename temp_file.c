@@ -1,73 +1,160 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
 
-// Struct to represent a person
-typedef struct {
-    int personality; // -1 (pessimistic) to 1 (optimistic)
-    int mood;       // -5 (very negative) to 5 (very positive)
-    int communication_style; // 0 (indirect) to 1 (direct)
-} Person;
+// Structure for a hash table node
+typedef struct Node {
+    char* key;
+    int count;
+    struct Node* next;
+} Node;
 
-// Simple sentiment analysis (hardcoded for demonstration)
-int get_sentiment(const char *text) {
-    if (strstr(text, "happy") || strstr(text, "good") || strstr(text, "agree")) return 1;
-    if (strstr(text, "sad") || strstr(text, "bad") || strstr(text, "disagree")) return -1;
+// Hash table structure
+typedef struct HashTable {
+    int size;
+    Node** table;
+} HashTable;
+
+// Hash function (simple polynomial rolling hash)
+unsigned int hash(const char* str, int size) {
+    unsigned int hashValue = 5381;
+    int c;
+    while ((c = *str++))
+        hashValue = ((hashValue << 5) + hashValue) + c; /* hash * 33 + c */
+    return hashValue % size;
+}
+
+// Create a new hash table
+HashTable* createHashTable(int size) {
+    HashTable* ht = (HashTable*)malloc(sizeof(HashTable));
+    if (ht == NULL) {
+        perror("Failed to allocate memory for hash table");
+        exit(EXIT_FAILURE);
+    }
+    ht->size = size;
+    ht->table = (Node**)calloc(ht->size, sizeof(Node*));
+    if (ht->table == NULL) {
+        perror("Failed to allocate memory for hash table buckets");
+        exit(EXIT_FAILURE);
+    }
+    return ht;
+}
+
+// Insert or update a key in the hash table
+void insertOrUpdate(HashTable* ht, const char* key) {
+    unsigned int index = hash(key, ht->size);
+    Node* current = ht->table[index];
+    while (current != NULL) {
+        if (strcmp(current->key, key) == 0) {
+            current->count++;
+            return;
+        }
+        current = current->next;
+    }
+    Node* newNode = (Node*)malloc(sizeof(Node));
+    if (newNode == NULL) {
+        perror("Failed to allocate memory for hash table node");
+        exit(EXIT_FAILURE);
+    }
+    newNode->key = strdup(key);
+    newNode->count = 1;
+    newNode->next = ht->table[index];
+    ht->table[index] = newNode;
+}
+
+// Get the count of a key in the hash table
+int getCount(HashTable* ht, const char* key) {
+    unsigned int index = hash(key, ht->size);
+    Node* current = ht->table[index];
+    while (current != NULL) {
+        if (strcmp(current->key, key) == 0) {
+            return current->count;
+        }
+        current = current->next;
+    }
     return 0;
 }
 
-// Function to update the mood of a person
-void update_state(Person *p, const char *interaction, const Person *other_person) {
-    int sentiment = get_sentiment(interaction);
-    p->mood += sentiment * (other_person->communication_style + 1); // Direct has more impact
-    // Add some influence from personality
-    p->mood += p->personality * sentiment;
-    // Clamp mood
-    if (p->mood > 5) p->mood = 5;
-    if (p->mood < -5) p->mood = -5;
-}
+// Function to calculate the minimum outfit changes
+int minOutfitChanges(char* initialOutfit[], int initialSize, char* finalOutfit[], int finalSize) {
+    HashTable* initialCounts = createHashTable(initialSize + finalSize); // Heuristic size
+    HashTable* finalCounts = createHashTable(initialSize + finalSize);
 
-// Function to simulate the interaction
-int simulate_interaction(Person *person1, Person *person2, char **interactions, int num_interactions) {
-    for (int i = 0; i < num_interactions; i++) {
-        if (i % 2 == 0) { // Person 1 speaks
-            update_state(person2, interactions[i], person1);
-        } else { // Person 2 speaks
-            update_state(person1, interactions[i], person2);
-        }
-        // Check for positive resolution (simplified)
-        if (person1->mood > 2 && person2->mood > 2) {
-            return 1; // Positive resolution
+    // Populate hash tables
+    for (int i = 0; i < initialSize; i++) {
+        insertOrUpdate(initialCounts, initialOutfit[i]);
+    }
+    for (int i = 0; i < finalSize; i++) {
+        insertOrUpdate(finalCounts, finalOutfit[i]);
+    }
+
+    int changes = 0;
+    int keptItems = 0;
+
+    // Iterate through the initial outfit counts
+    for (int i = 0; i < initialCounts->size; i++) {
+        Node* current = initialCounts->table[i];
+        while (current != NULL) {
+            int initialCount = current->count;
+            int finalCount = getCount(finalCounts, current->key);
+            keptItems += (initialCount < finalCount ? initialCount : finalCount); // Number of items that can be kept
+            current = current->next;
         }
     }
-    return 0; // No positive resolution
+
+    changes = initialSize + finalSize - 2 * keptItems;
+
+    // Free allocated memory (important!)
+    for (int i = 0; i < initialCounts->size; i++) {
+        Node* current = initialCounts->table[i];
+        while (current != NULL) {
+            Node* temp = current;
+            free(temp->key);
+            current = current->next;
+            free(temp);
+        }
+    }
+    free(initialCounts->table);
+    free(initialCounts);
+
+    for (int i = 0; i < finalCounts->size; i++) {
+        Node* current = finalCounts->table[i];
+        while (current != NULL) {
+            Node* temp = current;
+            free(temp->key);
+            current = current->next;
+            free(temp);
+        }
+    }
+    free(finalCounts->table);
+    free(finalCounts);
+
+    return changes;
 }
 
 int main() {
-    Person alice = {1, 0, 1}; // Optimistic, neutral mood, direct communicator
-    Person bob = {-1, 0, 0};  // Pessimistic, neutral mood, indirect communicator
+    char* initialOutfit[] = {"red_jacket", "white_shirt", "beige_pants", "black_glasses"};
+    int initialSize = sizeof(initialOutfit) / sizeof(initialOutfit[0]);
+    char* finalOutfit[] = {"white_sweater", "beige_pants", "brown_glasses"};
+    int finalSize = sizeof(finalOutfit) / sizeof(finalOutfit[0]);
 
-    char *interactions[] = {
-        "Hi, how are you?",
-        "I'm okay.",
-        "That's good to hear.",
-        "Yeah, I guess.",
-        "Did you like the movie?",
-        "It was alright.",
-        "I thought it was great!",
-        "Hmm, maybe.",
-        "So, we're on for tomorrow?",
-        "Sure, if you want."
-    };
-    int num_interactions = sizeof(interactions) / sizeof(interactions[0]);
+    int changes = minOutfitChanges(initialOutfit, initialSize, finalOutfit, finalSize);
+    printf("Minimum outfit changes: %d\n", changes); // Expected output: 4
 
-    int outcome = simulate_interaction(&alice, &bob, interactions, num_interactions);
+    char* initialOutfit2[] = {"blue_shirt", "black_pants"};
+    int initialSize2 = sizeof(initialOutfit2) / sizeof(initialOutfit2[0]);
+    char* finalOutfit2[] = {"blue_shirt", "black_pants"};
+    int finalSize2 = sizeof(finalOutfit2) / sizeof(finalOutfit2[0]);
+    changes = minOutfitChanges(initialOutfit2, initialSize2, finalOutfit2, finalSize2);
+    printf("Minimum outfit changes: %d\n", changes); // Expected output: 0
 
-    if (outcome == 1) {
-        printf("Likelihood of positive resolution: High\n");
-    } else {
-        printf("Likelihood of positive resolution: Low\n");
-    }
+    char* initialOutfit3[] = {"red_tshirt"};
+    int initialSize3 = sizeof(initialOutfit3) / sizeof(initialOutfit3[0]);
+    char* finalOutfit3[] = {"blue_tshirt"};
+    int finalSize3 = sizeof(finalOutfit3) / sizeof(finalOutfit3[0]);
+    changes = minOutfitChanges(initialOutfit3, initialSize3, finalOutfit3, finalSize3);
+    printf("Minimum outfit changes: %d\n", changes); // Expected output: 1
 
     return 0;
 }
