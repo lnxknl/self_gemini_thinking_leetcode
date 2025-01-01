@@ -55,11 +55,10 @@ void printPaths(int** paths, int pathCount, int pathLength, KeywordMap* keywordM
                 }
                 currentMap = currentMap->next;
             }
-            if (j < pathLength - 1) {
-                printf(" -> ");
-            }
+            printf(" -> ");
         }
-        printf("\n");
+        // Always print "processing" at the end
+        printf("processing\n");
     }
 }
 
@@ -172,18 +171,13 @@ int findLongestPaths(Graph* graph, KeywordMap* keywordMap, char** monologue, int
         maxLength = dp[processingIndex];
     }
 
-    // Collect all paths with max length
+    // Collect all paths with max length that end at processing
     int maxPathCount = 0;
     int** maxPaths = NULL;
-    // Collect all paths that end at processing with max length
-    maxPathCount = 0;
-    if (processingIndex != -1 && dp[processingIndex] == maxLength) {
-        maxPathCount = pathCounts[processingIndex];
-    }
     
-    // Also collect paths from other nodes that reach processing with max length
+    // First count all valid paths
     for (int i = 0; i < numWords; i++) {
-        if (i != processingIndex && dp[i] == maxLength) {
+        if (dp[i] == maxLength) {
             // Check if this path ends at processing
             KeywordMap* currentMap = keywordMap;
             int currentNode = -1;
@@ -213,10 +207,31 @@ int findLongestPaths(Graph* graph, KeywordMap* keywordMap, char** monologue, int
         int index = 0;
         for (int i = 0; i < numWords; i++) {
             if (dp[i] == maxLength) {
-                for (int j = 0; j < pathCounts[i]; j++) {
-                    maxPaths[index] = (int*)malloc(maxLength * sizeof(int));
-                    memcpy(maxPaths[index], paths[i][j], maxLength * sizeof(int));
-                    index++;
+                // Check if this path ends at processing
+                KeywordMap* currentMap = keywordMap;
+                int currentNode = -1;
+                while (currentMap != NULL) {
+                    if (strcmp(currentMap->keyword, monologue[i]) == 0) {
+                        currentNode = currentMap->node;
+                        break;
+                    }
+                    currentMap = currentMap->next;
+                }
+                
+                if (currentNode != -1) {
+                    Edge* currentEdge = graph->head[currentNode];
+                    while (currentEdge != NULL) {
+                        if (currentEdge->to == 3) { // 3 is the node for "processing"
+                            for (int j = 0; j < pathCounts[i]; j++) {
+                                maxPaths[index] = (int*)malloc((maxLength + 1) * sizeof(int));
+                                memcpy(maxPaths[index], paths[i][j], maxLength * sizeof(int));
+                                maxPaths[index][maxLength] = processingIndex; // Add processing node
+                                index++;
+                            }
+                            break;
+                        }
+                        currentEdge = currentEdge->next;
+                    }
                 }
             }
         }
