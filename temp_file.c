@@ -18,7 +18,7 @@ typedef struct {
 } Graph;
 
 // Structure to store the keyword to node mapping
-typedef struct {
+typedef struct KeywordMap {
     char keyword[MAX_KEYWORD_LENGTH];
     int node;
     struct KeywordMap* next;
@@ -41,15 +41,45 @@ void addEdge(Graph* graph, int from, int to) {
     graph->head[from] = newEdge;
 }
 
-// Function to find the longest path
-int findLongestPath(Graph* graph, KeywordMap* keywordMap, char** monologue, int numWords) {
+// Function to print paths
+void printPaths(int** paths, int pathCount, int pathLength, KeywordMap* keywordMap) {
+    for (int i = 0; i < pathCount; i++) {
+        printf("Path %d: ", i+1);
+        for (int j = 0; j < pathLength; j++) {
+            KeywordMap* currentMap = keywordMap;
+            while (currentMap != NULL) {
+                // Convert from 0-based index to 1-based node number
+                if (currentMap->node == paths[i][j] + 1) {
+                    printf("%s", currentMap->keyword);
+                    break;
+                }
+                currentMap = currentMap->next;
+            }
+            if (j < pathLength - 1) {
+                printf(" -> ");
+            }
+        }
+        printf("\n");
+    }
+}
+
+// Function to find the longest paths
+int findLongestPaths(Graph* graph, KeywordMap* keywordMap, char** monologue, int numWords) {
     if (numWords == 0) {
         return 0;
     }
 
-    int dp[numWords]; // dp[i] stores the length of the longest path ending with the i-th word
+    int dp[numWords];
+    int** paths[numWords];
+    int pathCounts[numWords];
+    
+    // Initialize DP and paths
     for (int i = 0; i < numWords; i++) {
-        dp[i] = 1; // Minimum length is 1 (the word itself)
+        dp[i] = 1;
+        paths[i] = (int**)malloc(sizeof(int*));
+        paths[i][0] = (int*)malloc(sizeof(int));
+        paths[i][0][0] = i;
+        pathCounts[i] = 1;
     }
 
     for (int i = 1; i < numWords; i++) {
@@ -81,6 +111,42 @@ int findLongestPath(Graph* graph, KeywordMap* keywordMap, char** monologue, int 
                         if (currentEdge->to == currentNode) {
                             if (dp[i] < dp[j] + 1) {
                                 dp[i] = dp[j] + 1;
+                                // Free old paths
+                                for (int k = 0; k < pathCounts[i]; k++) {
+                                    free(paths[i][k]);
+                                }
+                                free(paths[i]);
+                                // Copy paths from j
+                                pathCounts[i] = pathCounts[j];
+                                paths[i] = (int**)malloc(pathCounts[i] * sizeof(int*));
+                                for (int k = 0; k < pathCounts[i]; k++) {
+                                    paths[i][k] = (int*)malloc(dp[i] * sizeof(int));
+                                    memcpy(paths[i][k], paths[j][k], dp[j] * sizeof(int));
+                                    paths[i][k][dp[j]] = i;
+                                }
+                            } else if (dp[i] == dp[j] + 1) {
+                                // Add new paths
+                                int newCount = pathCounts[i] + pathCounts[j];
+                                int** newPaths = (int**)malloc(newCount * sizeof(int*));
+                                // Copy existing paths
+                                for (int k = 0; k < pathCounts[i]; k++) {
+                                    newPaths[k] = (int*)malloc(dp[i] * sizeof(int));
+                                    memcpy(newPaths[k], paths[i][k], dp[i] * sizeof(int));
+                                }
+                                // Add new paths from j
+                                for (int k = 0; k < pathCounts[j]; k++) {
+                                    newPaths[pathCounts[i] + k] = (int*)malloc(dp[i] * sizeof(int));
+                                    memcpy(newPaths[pathCounts[i] + k], paths[j][k], dp[j] * sizeof(int));
+                                    newPaths[pathCounts[i] + k][dp[j]] = i;
+                                }
+                                // Free old paths
+                                for (int k = 0; k < pathCounts[i]; k++) {
+                                    free(paths[i][k]);
+                                }
+                                free(paths[i]);
+                                // Update paths and count
+                                paths[i] = newPaths;
+                                pathCounts[i] = newCount;
                             }
                             break;
                         }
@@ -97,6 +163,45 @@ int findLongestPath(Graph* graph, KeywordMap* keywordMap, char** monologue, int 
             maxLength = dp[i];
         }
     }
+
+    // Collect all paths with max length
+    int maxPathCount = 0;
+    int** maxPaths = NULL;
+    for (int i = 0; i < numWords; i++) {
+        if (dp[i] == maxLength) {
+            maxPathCount += pathCounts[i];
+        }
+    }
+    
+    if (maxPathCount > 0) {
+        maxPaths = (int**)malloc(maxPathCount * sizeof(int*));
+        int index = 0;
+        for (int i = 0; i < numWords; i++) {
+            if (dp[i] == maxLength) {
+                for (int j = 0; j < pathCounts[i]; j++) {
+                    maxPaths[index] = (int*)malloc(maxLength * sizeof(int));
+                    memcpy(maxPaths[index], paths[i][j], maxLength * sizeof(int));
+                    index++;
+                }
+            }
+        }
+        printPaths(maxPaths, maxPathCount, maxLength, keywordMap);
+        
+        // Free maxPaths
+        for (int i = 0; i < maxPathCount; i++) {
+            free(maxPaths[i]);
+        }
+        free(maxPaths);
+    }
+
+    // Free all paths
+    for (int i = 0; i < numWords; i++) {
+        for (int j = 0; j < pathCounts[i]; j++) {
+            free(paths[i][j]);
+        }
+        free(paths[i]);
+    }
+
     return maxLength;
 }
 
@@ -138,8 +243,8 @@ int main() {
     char* monologue[] = {"network", "information", "processing", "data"};
     int numWords = sizeof(monologue) / sizeof(monologue[0]);
 
-    int longestPath = findLongestPath(graph, keywordMap, monologue, numWords);
-    printf("Longest path length: %d\n", longestPath); // Expected output: 3
+    int longestPath = findLongestPaths(graph, keywordMap, monologue, numWords);
+    printf("Longest path length: %d\n", longestPath);
 
     // Free allocated memory (important!)
     // ... (Add code to free graph and keyword map)
