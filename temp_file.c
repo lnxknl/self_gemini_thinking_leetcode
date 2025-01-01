@@ -175,9 +175,37 @@ int findLongestPaths(Graph* graph, KeywordMap* keywordMap, char** monologue, int
     // Collect all paths with max length
     int maxPathCount = 0;
     int** maxPaths = NULL;
-    // Only collect paths that end at processing
+    // Collect all paths that end at processing with max length
+    maxPathCount = 0;
     if (processingIndex != -1 && dp[processingIndex] == maxLength) {
         maxPathCount = pathCounts[processingIndex];
+    }
+    
+    // Also collect paths from other nodes that reach processing with max length
+    for (int i = 0; i < numWords; i++) {
+        if (i != processingIndex && dp[i] == maxLength) {
+            // Check if this path ends at processing
+            KeywordMap* currentMap = keywordMap;
+            int currentNode = -1;
+            while (currentMap != NULL) {
+                if (strcmp(currentMap->keyword, monologue[i]) == 0) {
+                    currentNode = currentMap->node;
+                    break;
+                }
+                currentMap = currentMap->next;
+            }
+            
+            if (currentNode != -1) {
+                Edge* currentEdge = graph->head[currentNode];
+                while (currentEdge != NULL) {
+                    if (currentEdge->to == 3) { // 3 is the node for "processing"
+                        maxPathCount += pathCounts[i];
+                        break;
+                    }
+                    currentEdge = currentEdge->next;
+                }
+            }
+        }
     }
     
     if (maxPathCount > 0) {
