@@ -211,7 +211,8 @@ int main() {
     addEdge(graph, 1, 2);
     addEdge(graph, 2, 3);
     addEdge(graph, 1, 4);
-    addEdge(graph, 4, 3);
+    addEdge(graph, 4, 5);
+    addEdge(graph, 5, 3);
 
     KeywordMap* keywordMap = NULL;
     // Assuming simple 1-to-1 mapping for simplicity in C, can be extended for 1-to-many
@@ -240,7 +241,13 @@ int main() {
     map4->next = keywordMap;
     keywordMap = map4;
 
-    char* monologue[] = {"network", "information", "processing", "data"};
+    KeywordMap* map5 = (KeywordMap*)malloc(sizeof(KeywordMap));
+    strcpy(map5->keyword, "visualization");
+    map5->node = 5;
+    map5->next = keywordMap;
+    keywordMap = map5;
+
+    char* monologue[] = {"network", "information", "processing", "analysis", "visualization", "data"};
     int numWords = sizeof(monologue) / sizeof(monologue[0]);
 
     int longestPath = findLongestPaths(graph, keywordMap, monologue, numWords);
