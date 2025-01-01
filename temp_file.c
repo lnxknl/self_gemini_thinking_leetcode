@@ -157,20 +157,27 @@ int findLongestPaths(Graph* graph, KeywordMap* keywordMap, char** monologue, int
         }
     }
 
-    int maxLength = 0;
+    // Find the index of "processing" in monologue
+    int processingIndex = -1;
     for (int i = 0; i < numWords; i++) {
-        if (dp[i] > maxLength) {
-            maxLength = dp[i];
+        if (strcmp(monologue[i], "processing") == 0) {
+            processingIndex = i;
+            break;
         }
+    }
+
+    // Only consider paths that end at processing
+    int maxLength = 0;
+    if (processingIndex != -1) {
+        maxLength = dp[processingIndex];
     }
 
     // Collect all paths with max length
     int maxPathCount = 0;
     int** maxPaths = NULL;
-    for (int i = 0; i < numWords; i++) {
-        if (dp[i] == maxLength) {
-            maxPathCount += pathCounts[i];
-        }
+    // Only collect paths that end at processing
+    if (processingIndex != -1 && dp[processingIndex] == maxLength) {
+        maxPathCount = pathCounts[processingIndex];
     }
     
     if (maxPathCount > 0) {
@@ -213,6 +220,8 @@ int main() {
     addEdge(graph, 1, 4);
     addEdge(graph, 4, 5);
     addEdge(graph, 5, 3);
+    addEdge(graph, 5, 6);
+    addEdge(graph, 6, 3);
 
     KeywordMap* keywordMap = NULL;
     // Assuming simple 1-to-1 mapping for simplicity in C, can be extended for 1-to-many
@@ -247,7 +256,13 @@ int main() {
     map5->next = keywordMap;
     keywordMap = map5;
 
-    char* monologue[] = {"network", "information", "processing", "analysis", "visualization", "data"};
+    KeywordMap* map6 = (KeywordMap*)malloc(sizeof(KeywordMap));
+    strcpy(map6->keyword, "interpretation");
+    map6->node = 6;
+    map6->next = keywordMap;
+    keywordMap = map6;
+
+    char* monologue[] = {"network", "information", "processing", "analysis", "visualization", "interpretation", "data"};
     int numWords = sizeof(monologue) / sizeof(monologue[0]);
 
     int longestPath = findLongestPaths(graph, keywordMap, monologue, numWords);
