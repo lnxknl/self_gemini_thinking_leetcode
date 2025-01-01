@@ -2,160 +2,147 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define HASH_TABLE_SIZE 100  // Adjust as needed
-#define WAITING_SIGNAL NULL  // Or ""
-#define SILENCE_DATA "SILENCE"
+#define MAX_NODES 500
+#define MAX_WORDS 200
+#define MAX_KEYWORD_LENGTH 50
 
-typedef struct AudioPacket {
-    int sequenceNumber;
-    char* audioData;
-    struct AudioPacket* next;
-} AudioPacket;
+// Structure to represent an edge in the graph
+typedef struct Edge {
+    int to;
+    struct Edge* next;
+} Edge;
 
-AudioPacket* packetListHead = NULL;
-AudioPacket* hashTable[HASH_TABLE_SIZE];
-int expectedSequenceNumber = 1;
+// Structure to represent the adjacency list
+typedef struct {
+    Edge* head[MAX_NODES + 1];
+} Graph;
 
-// Simple hash function
-int hash(int sequenceNumber) {
-    return sequenceNumber % HASH_TABLE_SIZE;
+// Structure to store the keyword to node mapping
+typedef struct {
+    char keyword[MAX_KEYWORD_LENGTH];
+    int node;
+    struct KeywordMap* next;
+} KeywordMap;
+
+// Function to initialize the graph
+Graph* createGraph() {
+    Graph* graph = (Graph*)malloc(sizeof(Graph));
+    for (int i = 0; i <= MAX_NODES; i++) {
+        graph->head[i] = NULL;
+    }
+    return graph;
 }
 
-// Function to check if a packet with the given sequence number exists in the hash table
-AudioPacket* findPacket(int sequenceNumber) {
-    int index = hash(sequenceNumber);
-    AudioPacket* current = hashTable[index];
-    while (current != NULL) {
-        if (current->sequenceNumber == sequenceNumber) {
-            return current;
-        }
-        current = current->next;
-    }
-    return NULL;
+// Function to add a directed edge to the graph
+void addEdge(Graph* graph, int from, int to) {
+    Edge* newEdge = (Edge*)malloc(sizeof(Edge));
+    newEdge->to = to;
+    newEdge->next = graph->head[from];
+    graph->head[from] = newEdge;
 }
 
-void receivePacket(int sequenceNumber, char* audioData) {
-    if (findPacket(sequenceNumber) != NULL) {
-        printf("Duplicate packet received: %d\n", sequenceNumber);
-        return;
+// Function to find the longest path
+int findLongestPath(Graph* graph, KeywordMap* keywordMap, char** monologue, int numWords) {
+    if (numWords == 0) {
+        return 0;
     }
 
-    AudioPacket* newPacket = (AudioPacket*)malloc(sizeof(AudioPacket));
-    if (newPacket == NULL) {
-        perror("Memory allocation failed");
-        exit(EXIT_FAILURE);
-    }
-    newPacket->sequenceNumber = sequenceNumber;
-    newPacket->audioData = strdup(audioData); // Allocate memory for audio data
-    newPacket->next = NULL;
-
-    // Insert into linked list (maintaining sorted order)
-    if (packetListHead == NULL || sequenceNumber < packetListHead->sequenceNumber) {
-        newPacket->next = packetListHead;
-        packetListHead = newPacket;
-    } else {
-        AudioPacket* current = packetListHead;
-        while (current->next != NULL && current->next->sequenceNumber < sequenceNumber) {
-            current = current->next;
-        }
-        newPacket->next = current->next;
-        current->next = newPacket;
+    int dp[numWords]; // dp[i] stores the length of the longest path ending with the i-th word
+    for (int i = 0; i < numWords; i++) {
+        dp[i] = 1; // Minimum length is 1 (the word itself)
     }
 
-    // Insert into hash table
-    int index = hash(sequenceNumber);
-    newPacket->next = hashTable[index];
-    hashTable[index] = newPacket;
-
-    printf("Received packet: %d\n", sequenceNumber);
-}
-
-char* getNextAudioChunk() {
-    if (packetListHead != NULL && packetListHead->sequenceNumber == expectedSequenceNumber) {
-        AudioPacket* nextChunkPacket = packetListHead;
-        char* audioChunk = nextChunkPacket->audioData;
-
-        // Remove from linked list
-        packetListHead = packetListHead->next;
-
-        // Remove from hash table (iterating to find and remove)
-        int index = hash(nextChunkPacket->sequenceNumber);
-        AudioPacket* current = hashTable[index];
-        AudioPacket* prev = NULL;
-        while (current != NULL) {
-            if (current->sequenceNumber == nextChunkPacket->sequenceNumber) {
-                if (prev == NULL) {
-                    hashTable[index] = current->next;
-                } else {
-                    prev->next = current->next;
-                }
+    for (int i = 1; i < numWords; i++) {
+        KeywordMap* currentMap = keywordMap;
+        int currentNode = -1;
+        while (currentMap != NULL) {
+            if (strcmp(currentMap->keyword, monologue[i]) == 0) {
+                currentNode = currentMap->node;
                 break;
             }
-            prev = current;
-            current = current->next;
+            currentMap = currentMap->next;
         }
 
-        free(nextChunkPacket->audioData);
-        free(nextChunkPacket); // Free the packet structure
-        expectedSequenceNumber++;
-        printf("Processed chunk for sequence: %d\n", expectedSequenceNumber - 1);
-        return audioChunk;
-    } else if (packetListHead != NULL && packetListHead->sequenceNumber > expectedSequenceNumber) {
-        printf("Missing packet detected: %d\n", expectedSequenceNumber);
-        expectedSequenceNumber++;
-        return SILENCE_DATA;
-    }
-    else {
-        printf("Waiting for packet: %d\n", expectedSequenceNumber);
-        return WAITING_SIGNAL;
-    }
-}
+        if (currentNode != -1) {
+            for (int j = 0; j < i; j++) {
+                KeywordMap* prevMap = keywordMap;
+                int prevNode = -1;
+                while (prevMap != NULL) {
+                    if (strcmp(prevMap->keyword, monologue[j]) == 0) {
+                        prevNode = prevMap->node;
+                        break;
+                    }
+                    prevMap = prevMap->next;
+                }
 
-// Function to free the allocated memory for the linked list and hash table
-void cleanup() {
-    AudioPacket* current = packetListHead;
-    while (current != NULL) {
-        AudioPacket* temp = current;
-        current = current->next;
-        free(temp->audioData);
-        free(temp);
-    }
-
-    for (int i = 0; i < HASH_TABLE_SIZE; i++) {
-        current = hashTable[i];
-        while (current != NULL) {
-            AudioPacket* temp = current;
-            current = current->next;
-            free(temp->audioData);
-            free(temp);
+                if (prevNode != -1) {
+                    Edge* currentEdge = graph->head[prevNode];
+                    while (currentEdge != NULL) {
+                        if (currentEdge->to == currentNode) {
+                            if (dp[i] < dp[j] + 1) {
+                                dp[i] = dp[j] + 1;
+                            }
+                            break;
+                        }
+                        currentEdge = currentEdge->next;
+                    }
+                }
+            }
         }
-        hashTable[i] = NULL;
     }
+
+    int maxLength = 0;
+    for (int i = 0; i < numWords; i++) {
+        if (dp[i] > maxLength) {
+            maxLength = dp[i];
+        }
+    }
+    return maxLength;
 }
 
 int main() {
-    // Initialize hash table
-    for (int i = 0; i < HASH_TABLE_SIZE; i++) {
-        hashTable[i] = NULL;
-    }
+    // Example Input
+    Graph* graph = createGraph();
+    addEdge(graph, 1, 2);
+    addEdge(graph, 2, 3);
+    addEdge(graph, 1, 4);
+    addEdge(graph, 4, 3);
 
-    // Test input
-    receivePacket(3, "AudioData3");
-    receivePacket(1, "AudioData1");
-    receivePacket(5, "AudioData5");
-    receivePacket(2, "AudioData2");
-    receivePacket(3, "DuplicateData"); // Simulate a duplicate
+    KeywordMap* keywordMap = NULL;
+    // Assuming simple 1-to-1 mapping for simplicity in C, can be extended for 1-to-many
+    // (In a real implementation, a more robust hash table would be preferred)
+    KeywordMap* map1 = (KeywordMap*)malloc(sizeof(KeywordMap));
+    strcpy(map1->keyword, "network");
+    map1->node = 1;
+    map1->next = keywordMap;
+    keywordMap = map1;
 
-    char* chunk;
-    printf("Getting audio chunks:\n");
-    while (expectedSequenceNumber <= 6) { // Process up to a certain sequence number for the example
-        chunk = getNextAudioChunk();
-        if (chunk != NULL) {
-            printf("Next audio chunk: %s\n", chunk);
-        }
-    }
+    KeywordMap* map2 = (KeywordMap*)malloc(sizeof(KeywordMap));
+    strcpy(map2->keyword, "information");
+    map2->node = 2;
+    map2->next = keywordMap;
+    keywordMap = map2;
 
-    cleanup(); // Free allocated memory
+    KeywordMap* map3 = (KeywordMap*)malloc(sizeof(KeywordMap));
+    strcpy(map3->keyword, "processing");
+    map3->node = 3;
+    map3->next = keywordMap;
+    keywordMap = map3;
+
+    KeywordMap* map4 = (KeywordMap*)malloc(sizeof(KeywordMap));
+    strcpy(map4->keyword, "analysis");
+    map4->node = 4;
+    map4->next = keywordMap;
+    keywordMap = map4;
+
+    char* monologue[] = {"network", "information", "processing", "data"};
+    int numWords = sizeof(monologue) / sizeof(monologue[0]);
+
+    int longestPath = findLongestPath(graph, keywordMap, monologue, numWords);
+    printf("Longest path length: %d\n", longestPath); // Expected output: 3
+
+    // Free allocated memory (important!)
+    // ... (Add code to free graph and keyword map)
 
     return 0;
 }
