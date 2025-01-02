@@ -1,67 +1,159 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include "uthash.h" // For hash table implementation
 
-// Comparison function for qsort (descending order)
-int compareDescending(const void *a, const void *b) {
-    return (*(int*)b - *(int*)a);
+// Structure for video metadata
+typedef struct {
+    int video_id;
+    char title[100];
+    int duration;
+    UT_hash_handle hh;
+    unsigned char *popularity_bitmap;
+} VideoMetadata;
+
+// Structure for watched segments (for Red-Black Tree - simplified for this example)
+typedef struct WatchedSegment {
+    int start_time;
+    int end_time;
+    // In a real Red-Black Tree implementation, you would have color, parent, left, and right pointers.
+} WatchedSegment;
+
+// Structure for user viewing history
+typedef struct {
+    int user_id;
+    // Using a simplified array to represent watched segments, a real implementation would use a Red-Black Tree
+    WatchedSegment *watched_segments;
+    int num_segments;
+    int max_segments;
+    UT_hash_handle hh;
+} UserViewingHistory;
+
+// Hash table for video metadata
+VideoMetadata *videos = NULL;
+
+// Hash table for user viewing history
+UserViewingHistory *user_history = NULL;
+
+// Function to add video metadata
+void add_video(int video_id, const char *title, int duration) {
+    VideoMetadata *video;
+    HASH_FIND_INT(videos, &video_id, video);
+    if (video == NULL) {
+        video = (VideoMetadata *)malloc(sizeof(VideoMetadata));
+        video->video_id = video_id;
+        strcpy(video->title, title);
+        video->duration = duration;
+        video->popularity_bitmap = (unsigned char *)calloc((duration + 7) / 8, sizeof(unsigned char)); // Allocate bitmap
+        HASH_ADD_INT(videos, video_id, video);
+    }
 }
 
-int maxBeltComfort(int holes[], int n, int num_prongs) {
-    if (num_prongs == 0) {
-        return 0;
+// Function to set a bit in the popularity bitmap
+void set_popularity_bit(VideoMetadata *video, int time) {
+    if (time >= 0 && time < video->duration) {
+        int byte_index = time / 8;
+        int bit_index = time % 8;
+        video->popularity_bitmap[byte_index] |= (1 << bit_index);
+    }
+}
+
+// Function to add to user viewing history (simplified)
+void add_viewing_history(int user_id, int video_id, int start_time, int end_time) {
+    UserViewingHistory *user;
+    HASH_FIND_INT(user_history, &user_id, user);
+    if (user == NULL) {
+        user = (UserViewingHistory *)malloc(sizeof(UserViewingHistory));
+        user->user_id = user_id;
+        user->watched_segments = (WatchedSegment *)malloc(sizeof(WatchedSegment) * 10); // Initial size
+        user->num_segments = 0;
+        user->max_segments = 10;
+        HASH_ADD_INT(user_history, user_id, user);
     }
 
-    if (num_prongs > n) {
-        // This scenario shouldn't occur based on constraints, but handling it defensively
-        num_prongs = n;
+    if (user->num_segments == user->max_segments) {
+        user->max_segments *= 2;
+        user->watched_segments = (WatchedSegment *)realloc(user->watched_segments, sizeof(WatchedSegment) * user->max_segments);
     }
 
-    // Create a copy of the holes array to avoid modifying the original
-    int *sorted_holes = (int*)malloc(n * sizeof(int));
-    for (int i = 0; i < n; i++) {
-        sorted_holes[i] = holes[i];
+    user->watched_segments[user->num_segments].start_time = start_time;
+    user->watched_segments[user->num_segments].end_time = end_time;
+    user->num_segments++;
+
+    // Update popularity bitmap
+    VideoMetadata *video;
+    HASH_FIND_INT(videos, &video_id, video);
+    if (video != NULL) {
+        for (int i = start_time; i < end_time && i < video->duration; ++i) {
+            set_popularity_bit(video, i);
+        }
+    }
+}
+
+// Function to check if a user has watched a specific time in a video (simplified)
+int has_user_watched(int user_id, int video_id, int time) {
+    UserViewingHistory *user;
+    HASH_FIND_INT(user_history, &user_id, user);
+    if (user != NULL) {
+        for (int i = 0; i < user->num_segments; ++i) {
+            if (time >= user->watched_segments[i].start_time && time < user->watched_segments[i].end_time) {
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+
+// Function to recommend segments (simplified)
+void recommend_segments(int user_id, int video_id) {
+    VideoMetadata *video;
+    HASH_FIND_INT(videos, &video_id, video);
+    if (video == NULL) {
+        printf("Video not found.\n");
+        return;
     }
 
-    // Sort the holes array in descending order
-    qsort(sorted_holes, n, sizeof(int), compareDescending);
+    printf("Recommendations for user %d, video %d (%s):\n", user_id, video_id, video->title);
 
-    int max_comfort = 0;
-    for (int i = 0; i < num_prongs; i++) {
-        max_comfort += sorted_holes[i];
+    for (int i = 0; i < video->duration; ++i) {
+        if (!has_user_watched(user_id, video_id, i)) {
+            int byte_index = i / 8;
+            int bit_index = i % 8;
+            if (video->popularity_bitmap[byte_index] & (1 << bit_index)) {
+                printf("Consider watching second %d.\n", i);
+            }
+        }
     }
-
-    free(sorted_holes);
-    return max_comfort;
 }
 
 int main() {
-    // Test Example 1
-    int holes1[] = {5, 1, 8, 3, 6};
-    int n1 = sizeof(holes1) / sizeof(holes1[0]);
-    int num_prongs1 = 3;
-    int result1 = maxBeltComfort(holes1, n1, num_prongs1);
-    printf("Maximum comfort (Test 1): %d\n", result1); // Expected: 5 + 8 + 6 = 19
+    // Example Usage
+    add_video(1, "Funny Cats Compilation", 600);
+    add_video(2, "Learn C Programming", 1200);
 
-    // Test Example 2
-    int holes2[] = {-2, 0, 3, -1, 4};
-    int n2 = sizeof(holes2) / sizeof(holes2[0]);
-    int num_prongs2 = 2;
-    int result2 = maxBeltComfort(holes2, n2, num_prongs2);
-    printf("Maximum comfort (Test 2): %d\n", result2); // Expected: 4 + 3 = 7
+    add_viewing_history(101, 1, 10, 20);
+    add_viewing_history(101, 1, 30, 40);
+    add_viewing_history(102, 1, 15, 25);
+    add_viewing_history(102, 2, 100, 150);
 
-    // Test Example 3
-    int holes3[] = {10, 10, 10, 10};
-    int n3 = sizeof(holes3) / sizeof(holes3[0]);
-    int num_prongs3 = 4;
-    int result3 = maxBeltComfort(holes3, n3, num_prongs3);
-    printf("Maximum comfort (Test 3): %d\n", result3); // Expected: 10 + 10 + 10 + 10 = 40
+    recommend_segments(101, 1);
+    recommend_segments(102, 1);
+    recommend_segments(101, 2);
 
-    // Test Example 4 (Fewer prongs than holes)
-    int holes4[] = {5, 2, 8, 1};
-    int n4 = sizeof(holes4) / sizeof(holes4[0]);
-    int num_prongs4 = 2;
-    int result4 = maxBeltComfort(holes4, n4, num_prongs4);
-    printf("Maximum comfort (Test 4): %d\n", result4); // Expected: 8 + 5 = 13
+    // Clean up hash tables (important in real applications)
+    VideoMetadata *current_video, *tmp_video;
+    HASH_ITER(hh, videos, current_video, tmp_video) {
+        HASH_DEL(videos, current_video);
+        free(current_video->popularity_bitmap);
+        free(current_video);
+    }
+
+    UserViewingHistory *current_user, *tmp_user;
+    HASH_ITER(hh, user_history, current_user, tmp_user) {
+        HASH_DEL(user_history, current_user);
+        free(current_user->watched_segments);
+        free(current_user);
+    }
 
     return 0;
 }
