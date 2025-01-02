@@ -1,83 +1,120 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
-// Structure to represent an interval
-typedef struct {
-    int start;
-    int end;
-} Interval;
+typedef struct Episode {
+    char* title;
+    int season;
+    int episode_number;
+    int duration_seconds;
+    struct Episode* next;
+    struct Episode* prev;
+} Episode;
 
-// Comparison function for sorting intervals by start time
-int compareIntervals(const void *a, const void *b) {
-    return ((Interval *)a)->start - ((Interval *)b)->start;
+// --- Simplified Hash Table (Illustrative - Needs full implementation) ---
+#define HASH_TABLE_SIZE 100 // Example size
+Episode* title_map[HASH_TABLE_SIZE];
+
+unsigned long hash_string(char *str) {
+    unsigned long hash = 5381;
+    int c;
+    while ((c = *str++))
+        hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
+    return hash % HASH_TABLE_SIZE;
 }
 
-// Function to merge overlapping intervals
-Interval* mergeIntervals(Interval intervals[], int n, int *mergedCount) {
-    if (n <= 0) {
-        *mergedCount = 0;
-        return NULL;
-    }
+void insert_episode_by_title(Episode* episode) {
+    unsigned long index = hash_string(episode->title);
+    // Simple collision handling: overwrite (not ideal for real-world)
+    title_map[index] = episode;
+}
 
-    // Sort the intervals based on start time
-    qsort(intervals, n, sizeof(Interval), compareIntervals);
+Episode* find_episode_by_title(char* title) {
+    unsigned long index = hash_string(title);
+    return title_map[index];
+}
+// --- End Simplified Hash Table ---
 
-    Interval *merged = (Interval *)malloc(n * sizeof(Interval)); // Allocate maximum possible size
-    if (merged == NULL) {
-        perror("Memory allocation failed");
-        exit(EXIT_FAILURE);
-    }
+// Array to hold the head of the linked list for each season (Example)
+#define MAX_SEASONS 10
+Episode* seasons[MAX_SEASONS] = {NULL};
 
-    merged[0] = intervals[0];
-    *mergedCount = 1;
-
-    for (int i = 1; i < n; i++) {
-        Interval current = intervals[i];
-        Interval lastMerged = merged[*mergedCount - 1];
-
-        if (current.start <= lastMerged.end) {
-            // Overlapping interval, merge
-            merged[*mergedCount - 1].end = (current.end > lastMerged.end) ? current.end : lastMerged.end;
+void add_episode_to_season(Episode* episode) {
+    if (episode->season > 0 && episode->season <= MAX_SEASONS) {
+        if (seasons[episode->season - 1] == NULL) {
+            seasons[episode->season - 1] = episode;
+            episode->prev = NULL;
+            episode->next = NULL;
         } else {
-            // Non-overlapping interval, add to merged list
-            merged[*mergedCount] = current;
-            (*mergedCount)++;
+            Episode* current = seasons[episode->season - 1];
+            while (current->next != NULL) {
+                current = current->next;
+            }
+            current->next = episode;
+            episode->prev = current;
+            episode->next = NULL;
         }
     }
-
-    return merged;
 }
 
-// Function to find the longest continuous watched segment
-int findLongestContinuousSegment(Interval mergedIntervals[], int mergedCount) {
-    int maxLength = 0;
-    for (int i = 0; i < mergedCount; i++) {
-        int length = mergedIntervals[i].end - mergedIntervals[i].start;
-        if (length > maxLength) {
-            maxLength = length;
+Episode* get_current_episode_by_time(int season, int elapsed_time) {
+    if (season > 0 && season <= MAX_SEASONS && seasons[season - 1] != NULL) {
+        Episode* current = seasons[season - 1];
+        int cumulative_time = 0;
+        while (current != NULL) {
+            if (elapsed_time >= cumulative_time && elapsed_time < cumulative_time + current->duration_seconds) {
+                return current;
+            }
+            cumulative_time += current->duration_seconds;
+            current = current->next;
         }
     }
-    return maxLength;
+    return NULL; // No episode found for the given time
+}
+
+Episode* get_next_episode(Episode* current_episode) {
+    return current_episode ? current_episode->next : NULL;
+}
+
+Episode* get_previous_episode(Episode* current_episode) {
+    return current_episode ? current_episode->prev : NULL;
 }
 
 int main() {
-    // Test input
-    Interval intervals[] = {{1, 5}, {10, 15}, {3, 7}, {20, 25}, {14, 18}};
-    int n = sizeof(intervals) / sizeof(intervals[0]);
+    // Example Usage
+    Episode* ep1 = (Episode*)malloc(sizeof(Episode));
+    ep1->title = "The One Where They All Meet";
+    ep1->season = 1;
+    ep1->episode_number = 1;
+    ep1->duration_seconds = 1400;
+    insert_episode_by_title(ep1);
+    add_episode_to_season(ep1);
 
-    int mergedCount;
-    Interval *mergedIntervals = mergeIntervals(intervals, n, &mergedCount);
+    Episode* ep2 = (Episode*)malloc(sizeof(Episode));
+    ep2->title = "The One with the Sonogram at the End";
+    ep2->season = 1;
+    ep2->episode_number = 2;
+    ep2->duration_seconds = 1350;
+    insert_episode_by_title(ep2);
+    add_episode_to_season(ep2);
 
-    printf("Merged Intervals:\n");
-    for (int i = 0; i < mergedCount; i++) {
-        printf("[%d, %d] ", mergedIntervals[i].start, mergedIntervals[i].end);
+    // Link episodes in the linked list (assuming add_episode handles this)
+    ep1->next = ep2;
+    ep2->prev = ep1;
+
+    Episode* found_by_title = find_episode_by_title("The One Where They All Meet");
+    if (found_by_title) {
+        printf("Found by title: %s, Season: %d, Episode: %d\n", found_by_title->title, found_by_title->season, found_by_title->episode_number);
     }
-    printf("\n");
 
-    int longestSegment = findLongestContinuousSegment(mergedIntervals, mergedCount);
-    printf("Longest Continuous Watched Segment: %d\n", longestSegment);
-
-    free(mergedIntervals); // Free allocated memory
+    Episode* current_ep = get_current_episode_by_time(1, 1000);
+    if (current_ep) {
+        printf("Current episode at time 1000s: %s\n", current_ep->title);
+        Episode* next_ep = get_next_episode(current_ep);
+        if (next_ep) {
+            printf("Next episode: %s\n", next_ep->title);
+        }
+    }
 
     return 0;
 }
