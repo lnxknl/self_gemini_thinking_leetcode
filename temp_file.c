@@ -39,6 +39,11 @@ bool isEmpty(Queue *q) {
 }
 
 void enqueue(Queue *q, State s) {
+    if (q == NULL) {
+        fprintf(stderr, "Queue pointer is NULL\n");
+        exit(1);
+    }
+    
     if (q->size >= QUEUE_CAPACITY) {
         fprintf(stderr, "Queue overflow\n");
         exit(1);
@@ -50,19 +55,25 @@ void enqueue(Queue *q, State s) {
         q->rear = (q->rear + 1) % QUEUE_CAPACITY;
     }
     
-    q->items[q->rear] = s;
+    memcpy(&(q->items[q->rear]), &s, sizeof(State));
     q->size++;
-    printf("Enqueued at %d, size: %d\n", q->rear, q->size); // Debug output
+    printf("Enqueued at %d, size: %d\n", q->rear, q->size);
 }
 
 State dequeue(Queue *q) {
+    if (q == NULL) {
+        fprintf(stderr, "Queue pointer is NULL\n");
+        exit(1);
+    }
+
     if (isEmpty(q)) {
         fprintf(stderr, "Queue underflow\n");
         exit(1);
     }
 
-    State item = q->items[q->front];
-    printf("Dequeued from %d, size: %d\n", q->front, q->size); // Debug output
+    State item;
+    memcpy(&item, &(q->items[q->front]), sizeof(State));
+    printf("Dequeued from %d, size: %d\n", q->front, q->size);
     
     if (q->front == q->rear) {
         q->front = q->rear = -1;
@@ -103,6 +114,17 @@ char* serializeGrid(char grid[MAX_GRID_SIZE][MAX_GRID_SIZE], int rows, int cols)
 }
 
 bool canEscape(char initialGrid[MAX_GRID_SIZE][MAX_GRID_SIZE], int rows, int cols, Position start, Position exit, int maxSteps) {
+    if (rows <= 0 || rows > MAX_GRID_SIZE || cols <= 0 || cols > MAX_GRID_SIZE) {
+        fprintf(stderr, "Invalid grid dimensions\n");
+        return false;
+    }
+
+    if (start.row < 0 || start.row >= rows || start.col < 0 || start.col >= cols ||
+        exit.row < 0 || exit.row >= rows || exit.col < 0 || exit.col >= cols) {
+        fprintf(stderr, "Invalid start or exit position\n");
+        return false;
+    }
+
     printf("Entering canEscape\n");
     printf("Rows: %d, Cols: %d\n", rows, cols);
     printf("Start: (%d, %d), Exit: (%d, %d)\n", start.row, start.col, exit.row, exit.col);
@@ -111,14 +133,13 @@ bool canEscape(char initialGrid[MAX_GRID_SIZE][MAX_GRID_SIZE], int rows, int col
     initQueue(&q);
     printf("Queue initialized at address: %p\n", (void*)&q);
 
-    // Visited states (using a simple array for demonstration, a hash set would be more efficient for larger grids)
-    // Here we are simplifying the visited check by only tracking position for demonstration.
-    // A full solution would need to track the grid configuration as well.
-    bool visited[MAX_GRID_SIZE][MAX_GRID_SIZE] = {0};
+    bool visited[MAX_GRID_SIZE][MAX_GRID_SIZE];
+    memset(visited, 0, sizeof(visited));
     printf("Visited array initialized\n");
 
     State initialState;
     printf("Creating initial state\n");
+    memset(&initialState, 0, sizeof(State));
     for (int i = 0; i < rows; i++) {
         for (int j = 0; j < cols; j++) {
             initialState.grid[i][j] = initialGrid[i][j];
@@ -153,28 +174,21 @@ bool canEscape(char initialGrid[MAX_GRID_SIZE][MAX_GRID_SIZE], int rows, int col
             int newRow = current.pos.row + dr[i];
             int newCol = current.pos.col + dc[i];
 
-            if (newRow >= 0 && newRow < rows && newCol >= 0 && newCol < cols && current.grid[newRow][newCol] != '#') {
-                State nextState = current;
+            if (newRow >= 0 && newRow < rows && newCol >= 0 && newCol < cols && 
+                current.grid[newRow][newCol] != '#' && !visited[newRow][newCol]) {
+                
+                State nextState;
+                memcpy(&nextState, &current, sizeof(State));
                 nextState.pos.row = newRow;
                 nextState.pos.col = newCol;
                 nextState.steps++;
 
                 if (current.grid[newRow][newCol] == 'E') {
-                    // Create a copy of the grid before simulating the event
-                    char newGrid[MAX_GRID_SIZE][MAX_GRID_SIZE];
-                    for (int i = 0; i < rows; i++) {
-                        for (int j = 0; j < cols; j++) {
-                            newGrid[i][j] = nextState.grid[i][j];
-                        }
-                    }
-                    simulateEvent(newGrid, rows, cols);
-                    memcpy(nextState.grid, newGrid, sizeof(char) * rows * cols);
+                    simulateEvent(nextState.grid, rows, cols);
                 }
 
-                if (!visited[nextState.pos.row][nextState.pos.col]) { // Simplified visited check
-                    visited[nextState.pos.row][nextState.pos.col] = true;
-                    enqueue(&q, nextState);
-                }
+                visited[nextState.pos.row][nextState.pos.col] = true;
+                enqueue(&q, nextState);
             }
         }
     }
