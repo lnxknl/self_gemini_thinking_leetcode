@@ -2,143 +2,112 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define HASH_TABLE_SIZE 100  // Adjust as needed
-#define WAITING_SIGNAL NULL  // Or ""
-#define SILENCE_DATA "SILENCE"
+typedef struct Episode {
+    char* title;
+    int season;
+    int episode_number;
+    int duration_seconds;
+    struct Episode* next;
+    struct Episode* prev;
+} Episode;
 
-typedef struct AudioPacket {
-    int sequenceNumber;
-    char* audioData;
-    struct AudioPacket* next;
-} AudioPacket;
+// --- Simplified Hash Table (Illustrative - Needs full implementation) ---
+#define HASH_TABLE_SIZE 100 // Example size
+Episode* title_map[HASH_TABLE_SIZE];
 
-AudioPacket* packetListHead = NULL;
-AudioPacket* hashTable[HASH_TABLE_SIZE];
-int expectedSequenceNumber = 1;
-
-// Simple hash function
-int hash(int sequenceNumber) {
-    return sequenceNumber % HASH_TABLE_SIZE;
+unsigned long hash_string(char *str) {
+    unsigned long hash = 5381;
+    int c;
+    while ((c = *str++))
+        hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
+    return hash % HASH_TABLE_SIZE;
 }
 
-// Function to check if a packet with the given sequence number exists in the hash table
-AudioPacket* findPacket(int sequenceNumber) {
-    int index = hash(sequenceNumber);
-    AudioPacket* current = hashTable[index];
-    while (current != NULL) {
-        if (current->sequenceNumber == sequenceNumber) {
-            return current;
-        }
-        current = current->next;
-    }
-    return NULL;
+void insert_episode_by_title(Episode* episode) {
+    unsigned long index = hash_string(episode->title);
+    // Simple collision handling: overwrite (not ideal for real-world)
+    title_map[index] = episode;
 }
 
-void receivePacket(int sequenceNumber, char* audioData) {
-    if (findPacket(sequenceNumber) != NULL) {
-        printf("Duplicate packet received: %d\n", sequenceNumber);
-        return;
-    }
-
-    AudioPacket* newPacket = (AudioPacket*)malloc(sizeof(AudioPacket));
-    if (newPacket == NULL) {
-        perror("Memory allocation failed");
-        exit(EXIT_FAILURE);
-    }
-    newPacket->sequenceNumber = sequenceNumber;
-    newPacket->audioData = strdup(audioData); // Allocate memory for audio data
-    newPacket->next = NULL;
-
-    // Insert into linked list (maintaining sorted order)
-    if (packetListHead == NULL || sequenceNumber < packetListHead->sequenceNumber) {
-        newPacket->next = packetListHead;
-        packetListHead = newPacket;
-    } else {
-        AudioPacket* current = packetListHead;
-        while (current->next != NULL && current->next->sequenceNumber < sequenceNumber) {
-            current = current->next;
-        }
-        newPacket->next = current->next;
-        current->next = newPacket;
-    }
-
-    // Insert into hash table
-    int index = hash(sequenceNumber);
-    newPacket->next = hashTable[index];
-    hashTable[index] = newPacket;
-
-    printf("Received packet: %d\n", sequenceNumber);
+Episode* find_episode_by_title(char* title) {
+    unsigned long index = hash_string(title);
+    return title_map[index];
 }
+// --- End Simplified Hash Table ---
 
-char* getNextAudioChunk() {
-    if (packetListHead != NULL && packetListHead->sequenceNumber == expectedSequenceNumber) {
-        AudioPacket* nextChunkPacket = packetListHead;
-        char* audioChunk = nextChunkPacket->audioData;
+// Array to hold the head of the linked list for each season (Example)
+#define MAX_SEASONS 10
+Episode* seasons[MAX_SEASONS] = {NULL};
 
-        // Remove from linked list
-        packetListHead = packetListHead->next;
-
-        // Remove from hash table (iterating to find and remove)
-        int index = hash(nextChunkPacket->sequenceNumber);
-        AudioPacket* current = hashTable[index];
-        AudioPacket* prev = NULL;
-        while (current != NULL) {
-            if (current->sequenceNumber == nextChunkPacket->sequenceNumber) {
-                if (prev == NULL) {
-                    hashTable[index] = current->next;
-                } else {
-                    prev->next = current->next;
-                }
-                break;
+void add_episode_to_season(Episode* episode) {
+    if (episode->season > 0 && episode->season <= MAX_SEASONS) {
+        if (seasons[episode->season - 1] == NULL) {
+            seasons[episode->season - 1] = episode;
+            episode->prev = NULL;
+            episode->next = NULL;
+        } else {
+            Episode* current = seasons[episode->season - 1];
+            while (current->next != NULL) {
+                current = current->next;
             }
-            prev = current;
-            current = current->next;
+            current->next = episode;
+            episode->prev = current;
+            episode->next = NULL;
         }
-
-        free(nextChunkPacket->audioData);
-        free(nextChunkPacket); // Free the packet structure
-        expectedSequenceNumber++;
-        printf("Processed chunk for sequence: %d\n", expectedSequenceNumber - 1);
-        return audioChunk;
-    } else if (packetListHead != NULL && packetListHead->sequenceNumber > expectedSequenceNumber) {
-        printf("Missing packet detected: %d\n", expectedSequenceNumber);
-        expectedSequenceNumber++;
-        return SILENCE_DATA;
-    }
-    else {
-        printf("Waiting for packet: %d\n", expectedSequenceNumber);
-        return WAITING_SIGNAL;
     }
 }
 
-// Function to free the allocated memory for the linked list and hash table
-void cleanup() {
-    AudioPacket* current = packetListHead;
-    while (current != NULL) {
-        AudioPacket* temp = current;
-        current = current->next;
-        free(temp->audioData);
-        free(temp);
-    }
-
-    for (int i = 0; i < HASH_TABLE_SIZE; i++) {
-        current = hashTable[i];
+Episode* get_current_episode_by_time(int season, int elapsed_time) {
+    if (season > 0 && season <= MAX_SEASONS && seasons[season - 1] != NULL) {
+        Episode* current = seasons[season - 1];
+        int cumulative_time = 0;
         while (current != NULL) {
-            AudioPacket* temp = current;
+            if (elapsed_time >= cumulative_time && elapsed_time < cumulative_time + current->duration_seconds) {
+                return current;
+            }
+            cumulative_time += current->duration_seconds;
             current = current->next;
-            free(temp->audioData);
-            free(temp);
         }
-        hashTable[i] = NULL;
     }
+    return NULL; // No episode found for the given time
+}
+
+Episode* get_next_episode(Episode* current_episode) {
+    return current_episode ? current_episode->next : NULL;
+}
+
+Episode* get_previous_episode(Episode* current_episode) {
+    return current_episode ? current_episode->prev : NULL;
 }
 
 int main() {
-    // Initialize hash table
-    for (int i = 0; i < HASH_TABLE_SIZE; i++) {
-        hashTable[i] = NULL;
+    // Example Usage
+    Episode* ep1 = (Episode*)malloc(sizeof(Episode));
+    ep1->title = "The One Where They All Meet";
+    ep1->season = 1;
+    ep1->episode_number = 1;
+    ep1->duration_seconds = 1400;
+    insert_episode_by_title(ep1);
+    add_episode_to_season(ep1);
+
+    Episode* ep2 = (Episode*)malloc(sizeof(Episode));
+    ep2->title = "The One with the Sonogram at the End";
+    ep2->season = 1;
+    ep2->episode_number = 2;
+    ep2->duration_seconds = 1350;
+    insert_episode_by_title(ep2);
+    add_episode_to_season(ep2);
+
+    // Link episodes in the linked list (assuming add_episode handles this)
+    ep1->next = ep2;
+    ep2->prev = ep1;
+
+    Episode* found_by_title = find_episode_by_title("The One Where They All Meet");
+    if (found_by_title) {
+        printf("Found by title: %s, Season: %d, Episode: %d\n", found_by_title->title, found_by_title->season, found_by_title->episode_number);
     }
 
+<<<<<<< HEAD
     // Test input
     receivePacket(3, "AudioData3");
     receivePacket(1, "AudioData1");
@@ -157,10 +126,16 @@ int main() {
             printf("Missing packet - inserting silence\n");
         } else {
             printf("Next audio chunk: %s\n", chunk);
+=======
+    Episode* current_ep = get_current_episode_by_time(1, 1000);
+    if (current_ep) {
+        printf("Current episode at time 1000s: %s\n", current_ep->title);
+        Episode* next_ep = get_next_episode(current_ep);
+        if (next_ep) {
+            printf("Next episode: %s\n", next_ep->title);
+>>>>>>> temp_save
         }
     }
-
-    cleanup(); // Free allocated memory
 
     return 0;
 }
