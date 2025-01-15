@@ -19,19 +19,13 @@ bool mightContainStar(int min_x, int max_x, int min_y, int max_y) {
     return false;
 }
 
-bool findStar(int min_x, int max_x, int min_y, int max_y, int* star_x, int* star_y) {
-    // Initialize star coordinates to -1
-    *star_x = -1;
-    *star_y = -1;
-
-    // Base case: single point to check
+void findStar(int min_x, int max_x, int min_y, int max_y, int* star_x, int* star_y) {
     if (min_x == max_x && min_y == max_y) {
         if (isStar(min_x, min_y)) {
             *star_x = min_x;
             *star_y = min_y;
-            return true;
         }
-        return false;
+        return;
     }
 
     int mid_x = min_x + (max_x - min_x) / 2;
@@ -39,27 +33,21 @@ bool findStar(int min_x, int max_x, int min_y, int max_y, int* star_x, int* star
 
     // Check each quadrant
     if (mightContainStar(min_x, mid_x, min_y, mid_y)) {
-        if (findStar(min_x, mid_x, min_y, mid_y, star_x, star_y)) {
-            return true;
-        }
+        findStar(min_x, mid_x, min_y, mid_y, star_x, star_y);
+        if (*star_x != -1) return; // Found the star
     }
     if (mightContainStar(mid_x + 1, max_x, min_y, mid_y)) {
-        if (findStar(mid_x + 1, max_x, min_y, mid_y, star_x, star_y)) {
-            return true;
-        }
+        findStar(mid_x + 1, max_x, min_y, mid_y, star_x, star_y);
+        if (*star_x != -1) return;
     }
     if (mightContainStar(min_x, mid_x, mid_y + 1, max_y)) {
-        if (findStar(min_x, mid_x, mid_y + 1, max_y, star_x, star_y)) {
-            return true;
-        }
+        findStar(min_x, mid_x, mid_y + 1, max_y, star_x, star_y);
+        if (*star_x != -1) return;
     }
     if (mightContainStar(mid_x + 1, max_x, mid_y + 1, max_y)) {
-        if (findStar(mid_x + 1, max_x, mid_y + 1, max_y, star_x, star_y)) {
-            return true;
-        }
+        findStar(mid_x + 1, max_x, mid_y + 1, max_y, star_x, star_y);
+        if (*star_x != -1) return;
     }
-
-    return false;
 }
 
 int main() {
@@ -86,8 +74,9 @@ int main() {
         // 2. Instead of fully determining the bounding box, let's directly use a large search space
         //    knowing the star exists within it. A more sophisticated approach would be to
         //    expand outwards from the initial hit.
-        if (findStar(-100, 200, -100, 200, &star_x, &star_y)) { // Example large search space
+        findStar(-100, 200, -100, 200, &star_x, &star_y); // Example large search space
 
+        if (star_x != -1) {
             printf("Lone star found at coordinates: (%d, %d)\n", star_x, star_y);
         } else {
             printf("Lone star not found (within the search space).\n");
